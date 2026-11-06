@@ -1,0 +1,6 @@
+function [B1pFileName,B1pFileAddr,index] = B1pTxFileNameGUI(Tx,filePath,fileName,Mag,Phs,FA)
+
+    [B1pFileName,B1pFileAddr,index] = TxFieldFileNameGUI(Tx,filePath,fileName,Mag,Phs,FA,...
+        'B1+ Filename',{'*.bfld','B1 Plus File (*.bfld)';'*.*','All Fiiles (*.*)'},...
+        'OPEN: B1 Plus File');
+end

@@ -1,0 +1,149 @@
+INPUT FILENAMES:
+  Geometry Filename:
+    geometry.smpl
+  Tissue Filename:
+    tissue.prop
+  Sequence Filename:
+    example.seqn
+  Delta Bo Filename:
+
+  # Tx:
+    1
+  Tx Mag & Phs:
+    10 0
+  Shim B1+ (uT):
+    58.7185
+  B1p Filename:
+    transmit.bfld
+  E1p Filename:
+
+  # Rx:
+    1
+  B1m Filename:
+    receive.bfld
+  E1m Filename:
+
+  Gx Filename:
+
+  Gy Filename:
+
+  Gz Filename:
+
+
+OUTPUT FILENAMES:
+  KSpace Filename:
+    example.ksig
+  KMap Filename:
+    example.ktrj
+  Noise Filename:
+
+  SAR Filename:
+
+
+GEOMETRY EDITOR SETUP:
+  Display:
+    ID
+  Scale:
+    Linear
+  Slice Orientation:
+    Axial
+  Slice Thickness:
+    18
+  Slice Position:
+    0
+  Sample Min:
+    XMin:
+      -12
+    YMin:
+      -12
+    ZMin:
+      -4
+  Sample Max:
+    XMax:
+      12
+    YMax:
+      12
+    ZMax:
+      4
+  Grad. IsoCtr:
+    XCtr:
+      0
+    YCtr:
+      0
+    ZCtr:
+      0
+  FOV Offset:
+    XSet:
+      0
+    YSet:
+      0
+    ZSet:
+      0
+  Filter:
+      0
+  Model Res.:
+    XWid:
+      2
+    YWid:
+      2
+    ZWid:
+      2
+
+IMAGING PARAMETER SETUP:
+  B0(T):
+    3
+  Nucleus:
+    1H
+  Sequence Type:
+    GRE
+  RF Shape:
+    Rect
+  RF Duration(ms):
+    0.1
+  # Points in RF Pulse:
+    20
+  RF Flip Angle:
+    90
+  Target B1+ (uT):
+
+  FOV(mm)
+    64  64
+  MatSize:
+    32  32
+  ADC Freq(kHz):
+    64
+  TI_Duration(ms):
+    0
+  Gradient ON:
+    SS:
+      0
+    PE:
+      1
+    FE:
+      1
+  TE(ms):
+    20
+  TR(ms):
+    12000
+  #Dummy TRs:
+    0
+  PE Direct:
+    P--A
+
+PROGRAM INFO:
+  NumIso:
+    1
+  CPU #:
+    2
+  Signal Engine:
+    CPU
+  NEX:
+    1
+  Noise Loading Domain:
+    Full
+  Noise Crop Bounds:
+
+  Noise Crop Note:
+
+  Mode:
+    Signal

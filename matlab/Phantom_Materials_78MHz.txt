@@ -1,0 +1,11 @@
+### Version 2024 ###												
+//			Frequency:	78.6 MHz								
+//												
+//												
+//												
+//												
+//												
+//	Tissue	Eps	Mue	Elec. Cond. (S/m)	Density (kg/m³)	K (W/mK)	Heat Capacity (kJ/K/kg)	BloodFlow (W/K/m^3)	MetabolicRate (W/m^3))	R	G	B
+Adrenals	1	54.0	1	0.400	1000.00	0	0	0	0	0	255	120
+Air	53	1.000	1	0.000	0.0	0.027	1.003666667	0	0	0	255	255
+Undefined	255	1.00	1	0.00	0.00	0	0	0	0	255	0	255

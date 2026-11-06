@@ -1,0 +1,6 @@
+TISSUE_PROPERTIES_V1 Nucleus=1H
+ID T1_ms T2_ms Concentration_mol_per_L chemical_shift_ppm conductivity_S_per_m mass_density_kg_per_m3 tissue_name
+0 1000 100 0 0 0 1000 background
+1 600 100 111 0 0 1000 block_A
+2 900 40 77.699999999999989 0 0 1000 block_B
+3 1200 80 55.5 0 0 1000 block_C

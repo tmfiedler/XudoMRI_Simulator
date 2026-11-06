@@ -1,0 +1,70 @@
+# Local Codex/editor metadata
+.codex/
+.agents/
+.cache/
+.vs/
+.vscode/
+.idea/
+/.local-archive/
+
+# Private studies and results stay local; ship one self-contained example.
+/protocols/*
+!/protocols/README.md
+!/protocols/example/
+!/protocols/example/example.prot
+!/protocols/example/example.seqn
+!/protocols/example/geometry.smpl
+!/protocols/example/tissue.prop
+!/protocols/example/transmit.bfld
+!/protocols/example/receive.bfld
+
+# CMake and compiler output
+**/build/
+**/build-*/
+**/CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+compile_commands.json
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.obj
+*.o
+*.a
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.tlog
+*.lastbuildstate
+*.d
+*.ii
+
+# Compiled applications and bundled runtime libraries belong in releases,
+# not in source control.
+*.exe
+*.dll
+
+# MATLAB, Octave, and editor-generated files
+*.asv
+*.autosave
+octave-workspace
+debug.log
+*.log
+*~
+/matlab/NDH6SA~M
+
+# Generated simulator data outside the private protocol tree
+*.ksig
+*.ktrj
+*.nois
+*.sar
+
+# Local runtime deployment and known non-source output directories
+/engine/bin/
+/engine/tests/output/
+/engine/signal/86/
+/matlab/debug/

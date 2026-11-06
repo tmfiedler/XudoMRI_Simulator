@@ -1,0 +1,24 @@
+# Shared sample temperature in kelvin, used for equilibrium M0 and thermal noise.
+# Tissue relaxation times and conductivity remain the supplied values at this T.
+sample_temperature_K: 310.0
+
+# CLI, standalone generators and field-viewer inputs use this ID when omitted.
+# Setup starts with the first nucleus below, preserving its current GUI default.
+default_nucleus: "23Na"
+
+# IDs are also GUI labels and tissue/protocol identifiers (exact case).
+# Add a nucleus using one of the implemented models; supply its tissue data.
+nuclei:
+  - id: "1H"
+    gamma_Hz_per_T: 42576000
+    spin: 0.5
+    relaxation:
+      model: single_pool_bloch
+
+  - id: "23Na"
+    gamma_Hz_per_T: 11262000
+    spin: 1.5
+    relaxation:
+      # Independent pools share T1 and RF rotations; this is not quadrupolar dynamics.
+      model: independent_two_pool_bloch
+      short_pool_fraction: 0.6  # The long fraction is calculated as 1 - short.
