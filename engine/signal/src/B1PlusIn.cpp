@@ -11,6 +11,7 @@
 #include"B1PlusIn.h"
 #include "InputSentinels.h"
 #include<cassert>
+#include<cmath>
 #include<fstream>
 #include<iostream>
 
@@ -147,6 +148,12 @@ bool B1PlusIn::readB1PlusData(std::vector<unsigned int> & geomList)
 			{
 				std::cout << "\nFatal Error: Unable to read B1+ voxel " << geomList[j]
 					<< " from \"" << fName[i] << "\".\n";
+				return false;
+			}
+			if (!std::isfinite(record[0]) || !std::isfinite(record[1]))
+			{
+				std::cerr << "Fatal Error: Nonfinite B1+ value in \"" << fName[i]
+					<< "\", voxel record " << (geomList[j] + 1) << ".\n";
 				return false;
 			}
 			tempB1Plus.push_back(std::complex<float> (record[0], record[1]));

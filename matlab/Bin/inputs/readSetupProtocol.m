@@ -89,8 +89,22 @@ protocol.noiseLoading = @() readNoiseLoadingProtocol(lines);
     end
 
     function weights = readTxWeight(coilIndex)
+        validateattributes(coilIndex,{'numeric'},{'scalar','real','finite','integer','positive'});
         index = fieldIndex('Tx Mag & Phs:')+coilIndex;
-        weights = str2num(cell2mat(lines(index,:))); %#ok<ST2NM>
+        if index > numel(lines)
+            error('SetupProtocol:TxWeight','Missing transmit weight row %d.',coilIndex);
+        end
+        tokens = regexp(lines{index},'\s+','split');
+        decimal = '^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?$';
+        if numel(tokens) ~= 2 || any(cellfun(@(s) isempty(regexp(s,decimal,'once')),tokens))
+            error('SetupProtocol:TxWeight', ...
+                'Transmit weight row %d requires two real numbers: magnitude and phase in degrees.',coilIndex);
+        end
+        weights = str2double(tokens);
+        if any(~isfinite(weights)) || weights(1) < 0
+            error('SetupProtocol:TxWeight', ...
+                'Transmit weight row %d requires finite values and a nonnegative magnitude.',coilIndex);
+        end
     end
 
     function files = filesBetween(firstLabel,nextLabel)

@@ -48,6 +48,9 @@ Setup;
 For a basic signal check after building, run `addpath('engine/tests'); testSignal`
 in MATLAB from the repository root. It checks both nuclei on CPU and CUDA and
 prints PASS/FAIL results; it does not replace full scientific validation.
+After building both engines, `addpath('engine/tests'); testInputValidation`
+checks protocol numeric parsing, native malformed-input rejection and nonfinite
+output guards on CPU/CUDA. Use `testInputValidation('CPU')` to check CPU only.
 
 ## Documentation
 

@@ -26,6 +26,7 @@ Execution::Execution(CmdInterp & cmdInterp)
 
 	GeomIn geomIn(cmdInterp);
 	initFlag = initFlag && geomIn.geomFlag;
+	if (!geomIn.geomFlag) return;
 
 	TissIn tissIn(cmdInterp);
 	initFlag = initFlag && tissIn.tissFlag;
@@ -675,6 +676,14 @@ bool Execution::initPhantomBeff()
 bool Execution::expPhantomKMap(CmdInterp & cmdInterp)
 {
 	assert(!kMap.empty());
+	for (std::size_t n = 0; n < kMap.size(); ++n)
+	{
+		if (!std::isfinite(kMap[n].x) || !std::isfinite(kMap[n].y) || !std::isfinite(kMap[n].z))
+		{
+			std::cerr << "Fatal Error: Nonfinite trajectory at sample " << (n + 1) << ".\n";
+			return false;
+		}
+	}
 
 	std::string expFName;
 	std::fstream fHandle;
@@ -713,6 +722,20 @@ bool Execution::expPhantomKMap(CmdInterp & cmdInterp)
 bool Execution::expPhantomKSpace(CmdInterp & cmdInterp)
 {
 	assert(!kSpace.empty());
+	// Check every receiver before opening any output file (including overwrites).
+	for (std::size_t coil = 0; coil < kSpace.size(); ++coil)
+	{
+		for (std::size_t sample = 0; sample < kSpace[coil].size(); ++sample)
+		{
+			const auto value = kSpace[coil][sample];
+			if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+			{
+				std::cerr << "Fatal Error: Nonfinite signal at receiver " << (coil + 1)
+					<< ", sample " << (sample + 1) << ".\n";
+				return false;
+			}
+		}
+	}
 
 	size_t ptr;
 	std::vector<std::string> expFName;

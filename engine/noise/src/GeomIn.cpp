@@ -10,6 +10,7 @@
 =========================================================================*/
 #include "GeomIn.h"
 #include<cassert>
+#include<cmath>
 #include<fstream>
 #include<iostream>
 #include<limits>
@@ -97,11 +98,35 @@ bool GeomIn::readGeomHeader(CmdInterp cmdInterp)
 		return false;
 	}
 	
+	// Validate raw metadata before any float-to-integer cast or unit conversion.
+	float header[13];
+	fHandle.read(reinterpret_cast<char*>(header), sizeof(header));
+	if (!fHandle)
+	{
+		std::cerr << "Fatal Error: Incomplete geometry header in \"" << fName << "\".\n";
+		return false;
+	}
+	for (float value : header)
+	{
+		if (!std::isfinite(value))
+		{
+			std::cerr << "Fatal Error: Nonfinite geometry header in \"" << fName << "\".\n";
+			return false;
+		}
+	}
+	if (header[0] < 0)
+	{
+		std::cerr << "Fatal Error: Invalid geometry count in \"" << fName << "\".\n";
+		return false;
+	}
+	fHandle.seekg(0, std::ios::beg);
+
 	// GeomHeader_________________________________________________________
 	
 	// totNumVox_______________________________________________
 	fHandle.read(reinterpret_cast<char*>(&buff), sizeof(buff));
-	geomHeader.totNumVox = (unsigned int) buff;
+	// The payload supplies the actual count; never narrow a rounded float32 header.
+	geomHeader.totNumVox = 0;
 
 	// Below, the procedure is to check for command line input of the value first. If command line input
 	// was present, that value will be used to define the volume of interest (voxels to be input). We
@@ -224,9 +249,10 @@ bool GeomIn::readGeomHeader(CmdInterp cmdInterp)
 	}
 	
 	// Check Point________________________________________________
-	if (!(geomHeader.min <= geomHeader.max))
+	if (!(geomHeader.min <= geomHeader.max && geomHeader.wid.x > 0 &&
+		geomHeader.wid.y > 0 && geomHeader.wid.z > 0))
 	{
-		std::cout << "Error: Region of interest definition shows ROI_min > ROI_max.\nCheck command line and/or geometry file header.\n";
+		std::cout << "Error: Geometry requires ordered ROI bounds and positive voxel widths in metres.\n";
 		std::cout << "Press enter to continue.\n";
 		std::cin.get();
 		return false;
@@ -278,9 +304,12 @@ bool GeomIn::readGeomData()
 		return false;
 	}
 
-	const unsigned int legacyHeaderCount = geomHeader.totNumVox;
+	float legacyHeaderCount;
+	fHandle.seekg(0, std::ios::beg);
+	fHandle.read(reinterpret_cast<char*>(&legacyHeaderCount), sizeof(legacyHeaderCount));
+	if (!fHandle) return false;
 	geomHeader.totNumVox = static_cast<unsigned int>(payloadVoxelCount);
-	if (legacyHeaderCount != geomHeader.totNumVox)
+	if (static_cast<double>(legacyHeaderCount) != static_cast<double>(geomHeader.totNumVox))
 	{
 		std::cout << "Warning: Legacy float32 geometry header reports " << legacyHeaderCount
 			<< " voxels, but the file payload contains " << geomHeader.totNumVox
@@ -303,6 +332,23 @@ bool GeomIn::readGeomData()
 		if (!fHandle)
 		{
 			std::cout << "\nError: Geometry payload ended before the derived voxel count was read.\n";
+			return false;
+		}
+		for (float value : record)
+		{
+			if (!std::isfinite(value))
+			{
+				std::cerr << "Fatal Error: Nonfinite geometry value in \"" << fName
+					<< "\", voxel record " << (j + 1) << ".\n";
+				return false;
+			}
+		}
+		if (record[3] != std::floor(record[3]) ||
+			static_cast<double>(record[3]) < std::numeric_limits<int>::min() ||
+			static_cast<double>(record[3]) > std::numeric_limits<int>::max())
+		{
+			std::cerr << "Fatal Error: Invalid tissue ID in \"" << fName
+				<< "\", voxel record " << (j + 1) << ".\n";
 			return false;
 		}
 		tempVoxel.geomInfo.pos.x = record[0];

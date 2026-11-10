@@ -11,6 +11,7 @@
 #include"B1MinsIn.h"
 #include "InputSentinels.h"
 #include<cassert>
+#include<cmath>
 #include<fstream>
 #include<iostream>
 
@@ -150,6 +151,12 @@ bool B1MinsIn::readB1MinsData(std::vector<unsigned int> & geomList)
 			{
 				std::cout << "\nFatal Error: Unable to read B1- voxel " << geomList[j]
 					<< " from \"" << fName[i] << "\".\n";
+				return false;
+			}
+			if (!std::isfinite(record[0]) || !std::isfinite(record[1]))
+			{
+				std::cerr << "Fatal Error: Nonfinite B1- value in \"" << fName[i]
+					<< "\", voxel record " << (geomList[j] + 1) << ".\n";
 				return false;
 			}
 			tempB1Mins.push_back(std::complex<float> (record[0], record[1]));

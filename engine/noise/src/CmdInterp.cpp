@@ -10,6 +10,7 @@
 =========================================================================*/
 #include "CmdInterp.h"
 #include "Nucleus.h"
+#include "../../common/NumericArguments.h"
 
 #include <cerrno>
 #include <cstdlib>
@@ -146,47 +147,47 @@ bool CmdInterp::interpCmd(int argc, char *argv[])
 		{
 		// find the matching value and assign command line parameters where appropriate
 		case cmd_xMin:
-			cmdValues.min.x = (float)strtol(parameter.c_str(), NULL, 0);
+			if (!nutate::indexArgument(parameter, option, cmdValues.min.x)) return false;
 			cmdFlags.min.x = true;
 			break;
 
 		case cmd_xMax:
-			cmdValues.max.x = (float)strtol(parameter.c_str(), NULL, 0);
+			if (!nutate::indexArgument(parameter, option, cmdValues.max.x)) return false;
 			cmdFlags.max.x = true;
 			break;
 
 		case cmd_yMin:
-			cmdValues.min.y = (float)strtol(parameter.c_str(), NULL, 0);
+			if (!nutate::indexArgument(parameter, option, cmdValues.min.y)) return false;
 			cmdFlags.min.y = true;
 			break;
 
 		case cmd_yMax:
-			cmdValues.max.y = (float)strtol(parameter.c_str(), NULL, 0);
+			if (!nutate::indexArgument(parameter, option, cmdValues.max.y)) return false;
 			cmdFlags.max.y = true;
 			break;
 
 		case cmd_zMin:
-			cmdValues.min.z = (float)strtol(parameter.c_str(), NULL, 0);
+			if (!nutate::indexArgument(parameter, option, cmdValues.min.z)) return false;
 			cmdFlags.min.z = true;
 			break;
 
 		case cmd_zMax:
-			cmdValues.max.z = (float)strtol(parameter.c_str(), NULL, 0);
+			if (!nutate::indexArgument(parameter, option, cmdValues.max.z)) return false;
 			cmdFlags.max.z = true;
 			break;
 
 		case cmd_xWid:
-			cmdValues.wid.x = (float)strtod(parameter.c_str(), NULL);
+			if (!nutate::positiveWidthArgument(parameter, option, cmdValues.wid.x)) return false;
 			cmdFlags.wid.x = true;
 			break;
 
 		case cmd_yWid:
-			cmdValues.wid.y = (float)strtod(parameter.c_str(), NULL);
+			if (!nutate::positiveWidthArgument(parameter, option, cmdValues.wid.y)) return false;
 			cmdFlags.wid.y = true;
 			break;
 
 		case cmd_zWid:
-			cmdValues.wid.z = (float)strtod(parameter.c_str(), NULL);
+			if (!nutate::positiveWidthArgument(parameter, option, cmdValues.wid.z)) return false;
 			cmdFlags.wid.z = true;
 			break;
 
@@ -253,9 +254,9 @@ bool CmdInterp::interpCmd(int argc, char *argv[])
 			std::size_t parsedCharacters = 0;
 			try
 			{
-				if (parameter.empty() || parameter[0] == '-')
+				if (parameter.empty() || parameter.find_first_not_of("0123456789") != std::string::npos)
 				{
-					throw std::invalid_argument("negative or empty seed");
+					throw std::invalid_argument("seed must contain decimal digits only");
 				}
 				cmdValues.noiseSeed = std::stoull(parameter, &parsedCharacters, 10);
 			}

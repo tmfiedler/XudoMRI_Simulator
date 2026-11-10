@@ -1,9 +1,43 @@
 # Research preview release review — 10 November 2026
 
-**Recommendation: hold the public research preview for the findings below.**
-The clean source builds and the exercised numerical paths pass, but protocol
-loading can evaluate code and invalid numerical inputs can produce successful
-runs with unusable results. Licensing also needs the maintainer's clarification.
+**Recommendation: hold publication for licensing clarification and remaining
+release checks.** R2–R4 below describe the original baseline and have now been
+repaired on `codex/release-readiness-review`; R1 and R5 remain open.
+
+## Input-validation follow-up — 10 November 2026
+
+- **R2 fixed:** protocol weights use strict, finite decimal-token parsing with
+  exactly two values and nonnegative magnitude. Expressions are not evaluated.
+- **R3 fixed:** active selected B1+/B1-/E1- records reject nonfinite components
+  with file/original-record diagnostics. Geometry headers and records are checked
+  before integer casts, and both engines stop on invalid geometry. Shared host
+  exports reject nonfinite signal, trajectory and noise values before opening
+  the corresponding output files. The same signal guards cover CPU and CUDA.
+- **R4 fixed:** signal/noise numeric CLI conversions require complete valid
+  values before narrowing. Thread/NumIso are positive 16-bit whole counts,
+  widths remain positive in metres, and crop indices fit their integer/float
+  storage. Valid signed/zero B0, integral count notation, base-0 crop indices and
+  ideal missing-map behavior remain available. MRI equations, defaults and file
+  layouts are unchanged.
+
+Both unchanged native Windows build scripts passed on a clean candidate copy,
+using the environment recorded below. Noise CTest passed Essentials (including
+new independent numeric-parser boundary checks) and NoiseMath, 2/2. In MATLAB:
+
+```matlab
+addpath('engine/tests'); testInputValidation; testSignal
+```
+
+All checks passed on CPU and CUDA. The retained
+[input-validation regression](../engine/tests/testInputValidation.m) rejects
+protocol expressions, partial CLI conversions, NaN/positive/negative infinity in
+both B1 components and all six E components, invalid geometry and finite inputs
+that overflow signal/noise computation. Rejected fixtures returned nonzero
+status and created no signal/noise output. Valid signed/zero B0, base-0 indices,
+NumIso subdivision and missing-map cases passed. The existing proton/sodium
+analytic checks retained the exact error maxima reported below, including
+nonzero gradients and generated GRE reconstruction. This follow-up does not
+claim completion of the outstanding interactive GUI, CST or licensing work.
 
 ## Scope
 
@@ -256,13 +290,15 @@ experimental; a research preview need not complete them if the limitations
 remain prominent. SE/EPI slice profiles, arbitrary EM normalizations and coil
 ranking are not independently validated by these smoke probes.
 
-Recommended publication gate: resolve R1, repair R2–R4 with focused regression
-checks, clarify R5, complete the core manual workflow check, and rerun affected
-tests on the final candidate. CI, citation metadata, a contribution guide and
+Remaining publication gate: resolve R1, clarify R5, complete the core manual
+workflow check, and rerun affected tests on the final release candidate. R2–R4
+repairs and their passing regressions are recorded in the follow-up above.
+CI, citation metadata, a contribution guide and
 a private security-reporting channel would improve the public project but are
 not, by themselves, reasons to reject this research preview.
 
-Runtime sources, license text and VERSION were left unchanged by this review.
+The initial assessment left runtime sources, license text and VERSION unchanged;
+the follow-up above changes validation code and tests only.
 The assessment does not authorize a tag, push, publication or binary release.
 Temporary probe inputs, outputs and logs were cleaned after recording these
 results. An ignored clean-source/deployment copy remains under

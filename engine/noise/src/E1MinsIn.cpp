@@ -10,6 +10,7 @@
 =========================================================================*/
 #include"E1MinsIn.h"
 #include<cassert>
+#include<cmath>
 #include<fstream>
 #include<iostream>
 #include<complex>
@@ -154,6 +155,15 @@ bool E1MinsIn::readE1MinsData(std::vector<unsigned int> & geomList)
 				std::cout << "\nFatal Error: Unable to read E1- voxel " << geomList[j]
 					<< " from \"" << fName[i] << "\".\n";
 				return false;
+			}
+			for (float component : record)
+			{
+				if (!std::isfinite(component))
+				{
+					std::cerr << "Fatal Error: Nonfinite E1- value in \"" << fName[i]
+						<< "\", voxel record " << (geomList[j] + 1) << ".\n";
+					return false;
+				}
 			}
 			Vect3DBuff.x = std::complex<float>(record[0], record[1]);
 			Vect3DBuff.y = std::complex<float>(record[2], record[3]);

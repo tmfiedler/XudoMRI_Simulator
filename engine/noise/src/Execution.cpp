@@ -31,6 +31,7 @@ Execution::Execution(CmdInterp & cmdInterp)
 
 	GeomIn geomIn(cmdInterp);
 	initFlag = initFlag && geomIn.geomFlag;
+	if (!geomIn.geomFlag) return;
 
 	TissIn tissIn(cmdInterp);
 	initFlag = initFlag && tissIn.tissFlag;
@@ -268,6 +269,22 @@ bool Execution::initPhantomKNoise()
 bool Execution::expPhantomKNoise(CmdInterp & cmdInterp)
 {
 	assert(!kNoise.empty());
+	for (std::size_t set = 0; set < kNoise.size(); ++set)
+	{
+		for (std::size_t coil = 0; coil < kNoise[set].size(); ++coil)
+		{
+			for (std::size_t sample = 0; sample < kNoise[set][coil].size(); ++sample)
+			{
+				const auto value = kNoise[set][coil][sample];
+				if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+				{
+					std::cerr << "Fatal Error: Nonfinite noise in set " << (set + 1)
+						<< ", receiver " << (coil + 1) << ", sample " << (sample + 1) << ".\n";
+					return false;
+				}
+			}
+		}
+	}
 
 	size_t ptr;
 	std::vector<std::vector<std::string> > expFName;

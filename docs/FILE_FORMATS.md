@@ -51,6 +51,9 @@ converting widths to metres. Tissue IDs refer to rows in the tissue file.
 The CST reformatter writes x fastest, then y, then z. Preserve that order in
 all corresponding maps. Readers derive `N = (file_size - 52) / 16`, reject
 partial records and warn if the header count differs from the payload.
+Native readers reject incomplete/nonfinite geometry headers, nonfinite voxel
+records and tissue IDs outside signed-32-bit integer storage before conversion.
+Effective voxel widths must remain positive after conversion to metres.
 
 Writer: [reformatter.m](../matlab/reformatter.m).
 Native readers: [signal GeomIn](../engine/signal/src/GeomIn.cpp) and
@@ -136,6 +139,9 @@ Size: **`4 + 8*N` bytes**. One file holds one complex B1+ transmit or B1−
 receive map in **tesla**. Values are interleaved per voxel, not stored as separate
 real and imaginary arrays. Signal readers reject partial records or a payload
 that does not match the geometry; a rounded header alone produces a warning.
+Every real/imaginary component read for the selected simulation region must be
+finite. A nonfinite value is fatal and identifies its file and original,
+one-based voxel record. Records outside the selected crop are not loaded.
 
 RF sequence multipliers scale B1+ maps. Receive accumulation uses the complex
 conjugate of the stored B1− value. Keep the exported polarization/phasor
@@ -184,6 +190,8 @@ E1+ maps can be viewed, while SAR remains experimental/unvalidated.
 Writer: [reformatter.m](../matlab/reformatter.m).
 Noise reader: [E1MinsIn](../engine/noise/src/E1MinsIn.cpp), which rejects
 partial records and geometry/payload count mismatches.
+All six components read for the selected loading region must be finite;
+errors identify the file and original, one-based voxel record.
 
 ## Gradient-perturbation maps
 
@@ -286,6 +294,9 @@ These streams contain no matrix size, nucleus or orientation metadata. Keep
 the matching `.prot` with the results, and `.ktrj` for radial reconstruction.
 A failed run may leave partial outputs; use results only after successful
 completion.
+The shared host export path rejects nonfinite computed signal/trajectory values
+and returns failure on either CPU or CUDA. Signal checks all receivers before
+opening any signal output; trajectory validation occurs before its file opens.
 
 Writer: [signal Execution.cpp](../engine/signal/src/Execution.cpp),
 `expPhantomKSpace` and `expPhantomKMap`.
@@ -308,6 +319,8 @@ noiseSet2/study2.nois
 `NEX` counts independent realizations, not averages. A fixed `NoiseSeed`
 reproduces output within the same executable build and inputs; exact samples
 need not match across C++ standard libraries.
+Nonfinite computed noise is rejected before any set's output files are opened;
+the diagnostic identifies the set, receiver and sample, and the engine fails.
 Writer: [noise Execution.cpp](../engine/noise/src/Execution.cpp).
 Reader: [reconstructionViewer.m](../matlab/Bin/reconstruction/reconstructionViewer.m).
 
@@ -337,6 +350,11 @@ Channel-file lists extend to the next label; list order defines channel order.
 `Tx Mag & Phs:` similarly contains one magnitude/phase pair per transmitter.
 Optional filenames and RF calibration values may be blank, but required labels
 must remain present.
+Each transmit-weight row must contain exactly two whitespace-separated real
+decimal numbers (scientific `e`/`E` notation is allowed): nonnegative magnitude
+and signed phase in degrees. Both must be finite. MATLAB expressions, complex
+numbers, brackets, comma separators and extra values are rejected without
+evaluation.
 
 | Group | Contains |
 | --- | --- |
@@ -402,6 +420,15 @@ Pass each argument as `"Key=value"`, with exact-case keys and no spaces around
 Repeat each map key once per corresponding channel. For example, two
 `B1MinsFile` arguments define receivers 1 and 2 in that order. Signal defaults
 to `kSpace1.bin` and `kMap.bin` when output paths are omitted.
+
+Numeric arguments must parse completely; suffixes such as `B0=3garbage`, NaN,
+infinity, overflow and nonzero values that underflow native float storage are
+errors. B0 and gradient-center overrides retain signed finite values, including
+zero. Explicit voxel widths must remain positive after conversion from mm to
+metres. `Thread` and `NumIso` must be whole integers in `1..65535`; integral
+floating notation such as `1e0` is allowed. Crop bounds use the existing signed
+base-0 integer syntax (decimal, leading-zero octal or `0x` hexadecimal) within
+signed-32-bit range and must be exactly representable in float storage.
 
 For noise, supply an **absolute Windows `KNoiseFile` path with backslashes**;
 the writer uses its parent directory to insert `noiseSet<N>`. `NEX` must be

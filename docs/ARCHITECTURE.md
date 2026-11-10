@@ -125,6 +125,14 @@ The CPU executable runs the host implementation. The GPU executable requires
 CUDA and fails if unavailable. Backend agreement is a regression check;
 independent physical references are needed to establish correctness.
 
+`engine/common/NumericArguments.h` validates complete numeric CLI conversions
+before narrowing to engine storage; both signal and noise parsers use it.
+The active geometry/B1/E readers reject invalid consumed values before casts or
+simulation. Export validation runs on the host for both signal backends and
+rejects nonfinite computed samples, so a zero exit status cannot certify a run
+whose exported values contain NaN or infinity. These guards do not change valid
+input equations or establish scientific accuracy.
+
 ## Noise engine
 
 Noise is a separate calculation using geometry, tissue conductivity, receive
