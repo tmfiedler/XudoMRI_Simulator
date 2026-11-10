@@ -2,7 +2,8 @@
 
 **Recommendation: hold publication for licensing clarification and remaining
 release checks.** R2–R4 below describe the original baseline and have now been
-repaired on `codex/release-readiness-review`; R1 and R5 remain open.
+repaired on `codex/release-readiness-review`. Image Processing Toolbox is now
+documented in the README requirements, resolving R5. R1 remains open.
 
 ## Input-validation follow-up — 10 November 2026
 
@@ -126,18 +127,19 @@ CLI parsers. Preserve intentional valid zero/sign conventions instead of
 assuming new physical restrictions. The existing noise NEX parser illustrates
 complete-consumption/range validation. Add focused malformed-input checks.
 
-### R5 — P2: Document the Image Processing Toolbox feature dependency
+### R5 — resolved: Document the Image Processing Toolbox feature dependency
 
-[README](../README.md) line 22 lists Signal Processing and Parallel Computing
-Toolboxes. MATLAB's dependency analyzer also reports **Image Processing Toolbox**
+At the initial review, [README](../README.md) listed Signal Processing and
+Parallel Computing Toolboxes. MATLAB's dependency analyzer also reported
+**Image Processing Toolbox**
 for the combined Setup/reco/reformatter entry points. A concrete use is the
 SNR viewer's polygon ROIs, which call `impoly` or `drawpolygon` at
 [reconstructionViewer.m](../matlab/Bin/reconstruction/reconstructionViewer.m)
 lines 925–937; without them the viewer displays a feature error.
 
-Document Image Processing Toolbox as required for SNR ROI drawing, or clearly
-describe that feature as optional. This is not evidence that the basic GRE
-simulation requires that toolbox. The official
+Resolved on 10 November 2026: README now lists Image Processing Toolbox in the
+installation requirements and explains its use for SNR polygon ROIs. This is
+not evidence that the basic GRE simulation requires that toolbox. The official
 [drawpolygon reference](https://www.mathworks.com/help/images/ref/drawpolygon.html)
 documents the Image Processing Toolbox ROI API.
 
@@ -290,7 +292,7 @@ experimental; a research preview need not complete them if the limitations
 remain prominent. SE/EPI slice profiles, arbitrary EM normalizations and coil
 ranking are not independently validated by these smoke probes.
 
-Remaining publication gate: resolve R1, clarify R5, complete the core manual
+Remaining publication gate: resolve R1, complete the core manual
 workflow check, and rerun affected tests on the final release candidate. R2–R4
 repairs and their passing regressions are recorded in the follow-up above.
 CI, citation metadata, a contribution guide and

@@ -10,6 +10,8 @@ when their stored contract changes.
 
 ## Unreleased
 
+- Document Image Processing Toolbox in the installation requirements for the
+  SNR viewer's polygon ROI tools.
 - Parse protocol transmit weights as finite numeric data without evaluating
   MATLAB expressions. Reject malformed numeric CLI values before narrowing.
 - Reject nonfinite active B1/E-field and geometry inputs, invalid geometry
