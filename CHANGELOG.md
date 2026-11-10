@@ -10,6 +10,10 @@ when their stored contract changes.
 
 ## Unreleased
 
+- Recorded a public research-preview readiness review, including clean Windows
+  builds, CPU/CUDA and noise checks, history screening, confirmed input-handling
+  defects, licensing clarification, and remaining manual validation work.
+
 ## 2026.0
 
 - Initial public source baseline: MATLAB experiment setup and reconstruction,
