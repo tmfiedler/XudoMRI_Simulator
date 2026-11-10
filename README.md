@@ -20,8 +20,7 @@ Install the following tools; these versions were tested on Windows x64:
 | NVIDIA driver (GPU execution) | 596.71 |
 
 Use MATLAB with Java enabled and the Signal Processing Toolbox, Image Processing
-Toolbox, and Parallel Computing Toolbox. Image Processing Toolbox provides the
-polygon ROI tools used by the SNR viewer.
+Toolbox, and Parallel Computing Toolbox.
 
 Runtime checks used an Intel Core Ultra 7 165H and NVIDIA RTX 2000 Ada Laptop
 GPU. The signal build requires CUDA even for CPU use because

@@ -10,18 +10,6 @@ when their stored contract changes.
 
 ## Unreleased
 
-- Document Image Processing Toolbox in the installation requirements for the
-  SNR viewer's polygon ROI tools.
-- Parse protocol transmit weights as finite numeric data without evaluating
-  MATLAB expressions. Reject malformed numeric CLI values before narrowing.
-- Reject nonfinite active B1/E-field and geometry inputs, invalid geometry
-  tissue-ID casts, and nonfinite computed signal, trajectory or noise outputs;
-  failed runs return nonzero status. Add native/parser and MATLAB regression
-  checks while retaining valid input conventions and MRI calculations.
-
-- Recorded a public research-preview readiness review, including clean Windows
-  builds, CPU/CUDA and noise checks, history screening, confirmed input-handling
-  defects, licensing clarification, and remaining manual validation work.
 
 ## 2026.0
 
