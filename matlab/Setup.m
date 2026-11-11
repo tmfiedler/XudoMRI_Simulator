@@ -3206,8 +3206,7 @@ reset();
                 flag = max(flag);
                 flag = [flag flag];
             end
-            set(hFOV,'value',flag);
-            set(hFOV,'string',num2str(flag(1)));
+            set(hFOV,'Value',flag,'String',num2str(flag(min(temp,numel(flag)))));
             inputInfo.FOV = flag;
         end;
     end

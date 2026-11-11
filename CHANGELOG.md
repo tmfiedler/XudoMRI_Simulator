@@ -10,10 +10,6 @@ when their stored contract changes.
 
 ## Unreleased
 
-- Keep Matrix Size edits in the selected FE or PE dimension regardless of orientation.
-- Offer to match the signal sample box when starting a run with a disjoint FOV.
-- Align the displayed FOV, RF slice, Match bounds and reconstructed image center for nonzero FOV offsets.
-- Allow `.prop` tissue properties files anywhere under `protocols/` to be tracked in Git.
 
 ## 2026.0
 
@@ -25,3 +21,11 @@ when their stored contract changes.
 - Basic format/noise checks and a standalone MATLAB signal test with analytic
   proton/sodium references, CPU/CUDA checks, and a GRE reconstruction smoke check.
 - Scientific methods and known limitations are described in `docs/SCIENTIFIC_METHODS.md`.
+
+### Fixes
+
+- Show the selected FE or PE field of view when loading a protocol.
+- Keep Matrix Size edits in the selected FE or PE dimension regardless of orientation.
+- Offer to match the signal sample box when starting a run with a disjoint FOV.
+- Align the displayed FOV, RF slice, Match bounds and reconstructed image center for nonzero FOV offsets.
+- Allow `.prop` tissue properties files anywhere under `protocols/` to be tracked in Git.
