@@ -125,9 +125,12 @@ Consult the methods guide before changing physical calculations. In particular:
 ## Documentation and release boundaries
 
 - After each requested task, run relevant checks, update affected guides, record
-  meaningful changes in `CHANGELOG.md` under Unreleased, and commit only that
-  task's changes. Keep detailed methods in the methods guide and extension
-  advice in architecture.
+  meaningful changes in `CHANGELOG.md` under Unreleased. Keep detailed methods
+  in the methods guide and extension advice in architecture.
+- Create a commit only when the user explicitly asks you to commit. Otherwise,
+  leave changes uncommitted for review. Before creating any commit, including a
+  release commit, show the user the exact proposed commit message and wait for
+  their approval. Include only the changes for that task.
 - Preserve original attribution, license notices and third-party provenance.
 - Spatial B0 maps/B0Solver, gradient-error maps, FOV offsets and SAR remain
   incomplete or known-defect paths. Radial reconstruction is quick-look
@@ -136,7 +139,9 @@ Consult the methods guide before changing physical calculations. In particular:
 - Keep `VERSION` unchanged during ordinary development. When explicitly asked to
   prepare a release, run relevant release checks, set `VERSION` to the specified
   `YYYY.X`, move pending changelog entries into a dated release section, leave an
-  empty Unreleased section, commit the release changes and create a lightweight
-  `vYYYY.X` tag. Never push or publish without explicit instructions.
-- Summarize what changed and why, the commit SHA, checks performed and unresolved
-  limitations. Do not claim release-wide scientific validation without explicit scope.
+  empty Unreleased section, and report the prepared changes. When the user also
+  explicitly asks to commit the release, commit the release changes and create
+  a lightweight `vYYYY.X` tag. Never push or publish without explicit instructions.
+- Summarize what changed and why, checks performed and unresolved
+  limitations. Include the commit SHA if a commit was requested and created. Do
+  not claim release-wide scientific validation without explicit scope.
