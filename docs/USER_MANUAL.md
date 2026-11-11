@@ -82,8 +82,8 @@ channel, keeping the same channel order for all map types.
 | `Gx` / `Gy` / `Gz` | Optional gradient perturbation maps |
 
 Blank B1 inputs use spatially uniform ideal fields. Supply B1 maps when you
-want to represent coil sensitivity patterns. Leave **dB0**, **Gx/Gy/Gz** blank
-and **FOV Offset** zero: these field-map and offset features are unsupported.
+want to represent coil sensitivity patterns. Leave the unsupported **dB0** and
+**Gx/Gy/Gz** field-map inputs blank.
 See [map details](FILE_FORMATS.md#delta-b0-map).
 
 ## Geometry display
@@ -98,9 +98,9 @@ available in the tissue file. `Scale` selects linear or logarithmic display.
 | **Grad. IsoCtr** | Model voxel indices used as the spatial origin for gradient encoding. Start with the geometry's supplied isocenter. |
 | **Model Res.** | Input model voxel widths in mm, read from geometry; these fields are read-only. |
 | **Slice Orientation** | Axial, sagittal or coronal plane; also selects the Cartesian acquisition orientation. |
-| **Slice Position** | Model voxel index of the viewed plane and requested Cartesian slice position. |
+| **Slice Position** | Model voxel index of the viewed plane. In Cartesian Setup this also edits the FOV offset along the slice axis. |
 | **Slice Thick.** | Nominal slice thickness in mm for slice-selective Cartesian imaging. |
-| **FOV Offset** | Keep zero; offset handling is unsupported. |
+| **FOV Offset** | Displacement of the green FOV from Grad. IsoCtr in X/Y/Z model voxels. In slice-selective Cartesian scans, its through-plane component sets the RF slice center. |
 
 **FOV** is the physical image extent in mm; **MatSize** sets the image sampling
 (or radial samples/spokes). For Cartesian images, FOV divided by matrix size
@@ -108,11 +108,12 @@ gives nominal pixel spacing. The input model retains its own voxel spacing.
 **NumIso** adds calculation points within each model voxel along model z;
 increasing it costs time/memory without changing the model spacing or image matrix.
 
-**Match** adjusts the Signal sample box to the FOV with a two-voxel buffer,
-clipped to the loaded model. For Cartesian imaging it uses orientation and
-slice thickness; for RAD_3D it uses the isotropic FOV on all three axes.
-Regenerate the sequence after changing acquisition orientation, slice position
-or thickness.
+The green outline shows the nominal acquisition FOV. The red Signal sample box
+limits the voxels that contribute signal and can be positioned independently.
+**Match** fits the red box around the green FOV with two extra voxels per side
+where the model bounds permit it. For nonselective Cartesian scans the fit
+spans the model along the slice axis. RAD_3D uses its isotropic FOV on all axes.
+Regenerate the sequence after changing the Cartesian prescription.
 
 ## Imaging controls
 
@@ -300,9 +301,9 @@ reco
    and select one `.ksig` file per channel from the completed run folder. For
    multiple receivers, select all channel files together; numbered files are
    sorted by channel number.
-2. Keep the matching `.prot` beside the signal files; radial data also needs
-   its `.ktrj`. The viewer finds these files automatically or asks you to
-   select them. Reconstruction starts when the data loads.
+2. Keep the matching `.prot` beside the signal files; radial data and shifted
+   Cartesian image centers also need the matching `.ktrj`. The viewer finds
+   these files automatically or asks you to select them.
 3. Start with **RSS Magnitude**, then use **Display** and the slice sliders
    to inspect the image.
 4. To add simulated noise, click **Load Noise (.nois)** and select one file per
@@ -339,5 +340,4 @@ map window, use **Add Axial/Sagittal/Coronal ROI** to draw a polygon; double-cli
 to finish. The results list shows mean SNR and voxel count for each ROI.
 
 Radial reconstruction is a quick-look volume; see the
-[method reference](SCIENTIFIC_METHODS.md#3d-radial-images) for its assumptions. Keep protocol
-FOV offsets zero; offset handling remains unsupported.
+[method reference](SCIENTIFIC_METHODS.md#3d-radial-images) for its assumptions.

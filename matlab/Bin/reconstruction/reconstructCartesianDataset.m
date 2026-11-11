@@ -2,8 +2,7 @@ function [recon,matSize] = reconstructCartesianDataset(signalData,protocol)
 %RECONSTRUCTCARTESIANDATASET Reconstruct one Cartesian plane from coil data.
 %   signalData is [readout samples * phase encodes, Rx coils] in acquisition
 %   order. protocol supplies MatSize, SequenceType, SliceOrientation,
-%   PEDirection, FOVOffset and sample bounds. Offsets use the sample-bound
-%   coordinate basis. The result contains the combined image and k-space views.
+%   PEDirection and an optional phase vector in acquisition order.
 
     matSize = round(protocol.MatSize(:).');
     if numel(matSize) < 2 || any(matSize(1:2) <= 0)
@@ -16,9 +15,10 @@ function [recon,matSize] = reconstructCartesianDataset(signalData,protocol)
             'Expected ',num2str(expectedSamples),' samples.']);
     end
 
-    geometry = getCartesianGeometry(protocol,matSize);
-    rowPhase = exp(1i*2*pi*(geometry.rowShift/matSize(1))*((1:matSize(1))-matSize(1)/2)).';
-    colPhase = exp(1i*2*pi*(geometry.colShift/matSize(2))*((1:matSize(2))-matSize(2)/2));
+    geometry = getCartesianGeometry(protocol);
+    if isfield(protocol,'FOVPhase')
+        signalData = signalData .* protocol.FOVPhase;
+    end
 
     numCoils = size(signalData,2);
     imageCoils = [];
@@ -29,7 +29,6 @@ function [recon,matSize] = reconstructCartesianDataset(signalData,protocol)
         if geometry.reversePE
             kspaceData = fliplr(kspaceData);
         end
-        kspaceData = kspaceData .* (rowPhase * colPhase);
         imageData = fftshift(fft2(fftshift(kspaceData)));
         if strcmp(geometry.imageTransform,'rotateClockwise')
             imageData = rot90(imageData,-1);
@@ -59,8 +58,7 @@ function [recon,matSize] = reconstructCartesianDataset(signalData,protocol)
 end
 
 function kspaceData = restoreCartesianReadoutOrder(kspaceData,sequenceType)
-    % GRE_EPI stores ADC samples in acquisition-time order. Its frequency-
-    % encoding gradient reverses on every even echo, so those columns run
+    % The EPI frequency-encoding gradient reverses on every even echo, so those columns run
     % from positive to negative k-space and must be reversed before the
     % Cartesian FFT. Do this before any whole-matrix PE-direction reversal.
     if strcmpi(strtrim(sequenceType),'GRE_EPI')
@@ -68,11 +66,9 @@ function kspaceData = restoreCartesianReadoutOrder(kspaceData,sequenceType)
     end
 end
 
-function geometry = getCartesianGeometry(protocol,matSize)
+function geometry = getCartesianGeometry(protocol)
     orientation = strtrim(protocol.SliceOrientation);
     peDirection = strtrim(protocol.PEDirection);
-    offsets = protocol.FOVOffset;
-    spans = protocol.SampleMax + 1 - protocol.SampleMin;
 
     geometry.orientation = orientation;
     geometry.reversePE = false;
@@ -92,12 +88,8 @@ function geometry = getCartesianGeometry(protocol,matSize)
             switch peDirection
                 case 'P--A'
                     geometry.imageTransform = 'rotateClockwise';
-                    geometry.rowShift = offsetToPixels(offsets(1),spans(1),matSize(1),'X');
-                    geometry.colShift = offsetToPixels(offsets(2),spans(2),matSize(2),'Y');
                 case 'L--R'
                     geometry.imageTransform = 'flipLeftRight';
-                    geometry.rowShift = offsetToPixels(offsets(2),spans(2),matSize(1),'Y');
-                    geometry.colShift = offsetToPixels(offsets(1),spans(1),matSize(2),'X');
                 otherwise
                     error('Unsupported PE direction "%s" for axial Cartesian data.',peDirection);
             end
@@ -106,12 +98,8 @@ function geometry = getCartesianGeometry(protocol,matSize)
             switch peDirection
                 case 'P--A'
                     geometry.imageTransform = 'flipLeftRight';
-                    geometry.rowShift = offsetToPixels(offsets(3),spans(3),matSize(1),'Z');
-                    geometry.colShift = offsetToPixels(offsets(2),spans(2),matSize(2),'Y');
                 case 'F--H'
                     geometry.imageTransform = 'rotateClockwise';
-                    geometry.rowShift = offsetToPixels(offsets(2),spans(2),matSize(1),'Y');
-                    geometry.colShift = offsetToPixels(offsets(3),spans(3),matSize(2),'Z');
                 otherwise
                     error('Unsupported PE direction "%s" for sagittal Cartesian data.',peDirection);
             end
@@ -120,12 +108,8 @@ function geometry = getCartesianGeometry(protocol,matSize)
             switch peDirection
                 case 'L--R'
                     geometry.imageTransform = 'flipLeftRight';
-                    geometry.rowShift = offsetToPixels(offsets(3),spans(3),matSize(1),'Z');
-                    geometry.colShift = offsetToPixels(offsets(1),spans(1),matSize(2),'X');
                 case 'F--H'
                     geometry.imageTransform = 'rotateClockwise';
-                    geometry.rowShift = offsetToPixels(offsets(1),spans(1),matSize(1),'X');
-                    geometry.colShift = offsetToPixels(offsets(3),spans(3),matSize(2),'Z');
                 otherwise
                     error('Unsupported PE direction "%s" for coronal Cartesian data.',peDirection);
             end
@@ -133,17 +117,6 @@ function geometry = getCartesianGeometry(protocol,matSize)
         otherwise
             error('Unsupported Cartesian slice orientation: %s',orientation);
     end
-end
-
-function pixelShift = offsetToPixels(offset,span,matrixSize,axisName)
-    if offset == 0
-        pixelShift = 0;
-        return;
-    end
-    if ~isfinite(span) || span <= 0
-        error('Protocol sample bounds are invalid for the %s-axis FOV offset.',axisName);
-    end
-    pixelShift = offset / (span/matrixSize);
 end
 
 function volume = embedCartesianImage(imageData,orientation)

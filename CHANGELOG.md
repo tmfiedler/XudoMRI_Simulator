@@ -10,6 +10,7 @@ when their stored contract changes.
 
 ## Unreleased
 
+- Align the displayed FOV, RF slice, Match bounds and reconstructed image center for nonzero FOV offsets.
 - Allow `.prop` tissue properties files anywhere under `protocols/` to be tracked in Git.
 
 ## 2026.0

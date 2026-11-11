@@ -84,7 +84,6 @@ DEBUG = 0;
                 end
             case 2 % 'Rect'
                 tempRF_Y = ones(1,RF.Num);
-                frqOffset = 0;
             case 3 % 'Gauss'
                 tempRF_Y = (gausswin(RF.Num))';
         end;
@@ -170,7 +169,7 @@ DEBUG = 0;
         
         if dummy>0
             varargout{1}.Dummy.DFreq.tStep = varargout{1}.Dummy.tStep;
-            varargout{1}.Dummy.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0,ones(1,RF.Num)*frqOffset,0];
+            varargout{1}.Dummy.DFreq.value = zeros(1,2*RF.Num+3);
         end;
         
         %% ADC

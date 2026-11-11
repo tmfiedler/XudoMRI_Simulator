@@ -99,7 +99,7 @@ function varargout = GRE_EPI(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus
         varargout{1}.Main.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0];
         if dummy>0
             varargout{1}.Dummy.DFreq.tStep = varargout{1}.Dummy.tStep;
-            varargout{1}.Dummy.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0];
+            varargout{1}.Dummy.DFreq.value = zeros(1,RF.Num+2);
         end;
                         
         %% ADC

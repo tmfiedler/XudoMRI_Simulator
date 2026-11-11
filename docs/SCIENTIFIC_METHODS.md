@@ -312,8 +312,17 @@ I_c = fftshift(fft2(fftshift(K_c)));
 ```
 
 This uses the negative Fourier exponent. Cartesian output retains MATLAB's
-unscaled FFT gain; the normalized radial gain below is different. Keep FOV
-offsets zero because that path remains a known defect.
+unscaled FFT gain; the normalized radial gain below is different.
+
+A prescribed offset is measured from the gradient isocenter. During a
+slice-selective RF pulse, the carrier is `gamma_Hz * Gss * dSS`, with the
+gradient in T/m and the through-plane displacement in metres. The RF shape
+still determines the spatial profile. Nonselective dummy pulses use zero
+carrier offset. Before reconstruction, the viewer multiplies each receiver's
+sample by `exp(-i2*pi*k·d)` using the matching trajectory and displacement
+in metres. It uses only the two in-plane components for Cartesian data and
+all three for radial data. The signal sample bounds do not enter this phase
+correction.
 Implementation: [reconstructCartesianDataset.m](../matlab/Bin/reconstruction/reconstructCartesianDataset.m).
 
 ### 3D radial images
@@ -428,7 +437,7 @@ Implementation: [reconstructionViewer.m](../matlab/Bin/reconstruction/reconstruc
 
 The equations above describe current behavior. They do not establish absolute
 scanner calibration or validate arbitrary anatomy, EM exports, RF settings or
-coil rankings. Spatial B0 maps/B0Solver, gradient-error maps, FOV offsets and SAR
+coil rankings. Spatial B0 maps/B0Solver, gradient-error maps and SAR
 remain incomplete or known-defect paths; the [SAR task](../TODO.md) explains
 the experimental route. Final post-refactor release-wide scientific revalidation
 remains separate from the controlled checks already recorded.

@@ -125,129 +125,35 @@ function Output = combineSeqRect(interSeqData,orientation,peDirection,dummy,pres
         Output.Main.DFreq.repeat = Result.Main.repeat;
     end;
         
+    axesXYZ = [1 2 3];
+    peSign = 1;
+    if ~preserveLogicalAxes
+        direction = peDirection{1};
+        swapInPlane = (orientation == 1 && any(direction(1) == 'LR')) || ...
+            (orientation ~= 1 && any(direction(1) == 'FH'));
+        axesXYZ = cartesianAxes(orientation,swapInPlane);
+        peSign = 1 - 2*ismember(direction,{'A--P','R--L','H--F'});
+    end
+    fields = {'Gx','Gy','Gz'};
+    fe = fields{axesXYZ(1)};
+    pe = fields{axesXYZ(2)};
+    ss = fields{axesXYZ(3)};
+    Output.Main.(fe).value = Result.Main.Gfe.value;
+    Output.Main.(fe).repeat = Result.Main.repeat;
     if isfield(Result.Main.Gpe,'increment')
-        tempIncrement = Result.Main.Gpe.increment;
+        increment = Result.Main.Gpe.increment;
     else
-        tempIncrement = seqInterp(interSeqData.Main.Gpe.increment,interSeqData.Main.Gpe.tAbs,Result.Main.tAbs,2);
+        increment = seqInterp(interSeqData.Main.Gpe.increment,interSeqData.Main.Gpe.tAbs,Result.Main.tAbs,2);
     end
-    if preserveLogicalAxes
-        Output.Main.Gx.value = Result.Main.Gfe.value;
-        Output.Main.Gx.repeat = Result.Main.repeat;
-
-        Result.Main.Gpe.increment = +1 .* tempIncrement;
-        Output.Main.Gy.value = Result.Main.Gpe.value;
-        for n=1:(Result.Main.repeat-1)
-            Output.Main.Gy.value = [Output.Main.Gy.value, Result.Main.Gpe.value + Result.Main.Gpe.increment .* n];
-        end
-        Output.Main.Gy.repeat = 1;
-
-        Output.Main.Gz.value = Result.Main.Gss.value;
-        Output.Main.Gz.repeat = Result.Main.repeat;
-    else
-    switch orientation
-        case 1 % Axial
-            switch cell2mat(peDirection)           
-                case {'P--A','A--P'}
-                    Output.Main.Gx.value = Result.Main.Gfe.value;
-                    Output.Main.Gx.repeat = Result.Main.repeat;
-
-                    peSign = 1 - 2*strcmp(cell2mat(peDirection),'A--P');
-                    Result.Main.Gpe.increment = peSign .* tempIncrement;
-                    Output.Main.Gy.value = peSign .* Result.Main.Gpe.value;
-                    for n=1:(Result.Main.repeat-1)
-                        Output.Main.Gy.value = [Output.Main.Gy.value, peSign .* Result.Main.Gpe.value + Result.Main.Gpe.increment .* n];
-                    end;
-                    Output.Main.Gy.repeat = 1;
-
-                    Output.Main.Gz.value = Result.Main.Gss.value;
-                    Output.Main.Gz.repeat = Result.Main.repeat;
-
-                case {'L--R','R--L'}
-                    Output.Main.Gy.value = Result.Main.Gfe.value;
-                    Output.Main.Gy.repeat = Result.Main.repeat;
-
-                    peSign = 1 - 2*strcmp(cell2mat(peDirection),'R--L');
-                    Result.Main.Gpe.increment = peSign .* tempIncrement;
-                    Output.Main.Gx.value = peSign .* Result.Main.Gpe.value;
-                    for n=1:(Result.Main.repeat-1)
-                        Output.Main.Gx.value = [Output.Main.Gx.value, peSign .* Result.Main.Gpe.value + Result.Main.Gpe.increment .* n];
-                    end;
-                    Output.Main.Gx.repeat = 1;
-
-                    Output.Main.Gz.value = Result.Main.Gss.value;
-                    Output.Main.Gz.repeat = Result.Main.repeat;
-            end;
-            
-        case 2 % Sagittal
-            switch cell2mat(peDirection)
-                    
-                case {'P--A','A--P'}
-                    Output.Main.Gz.value = Result.Main.Gfe.value;
-                    Output.Main.Gz.repeat = Result.Main.repeat;
-
-                    peSign = 1 - 2*strcmp(cell2mat(peDirection),'A--P');
-                    Result.Main.Gpe.increment = peSign .* tempIncrement;
-                    Output.Main.Gy.value = peSign .* Result.Main.Gpe.value;
-                    for n=1:(Result.Main.repeat-1)
-                        Output.Main.Gy.value = [Output.Main.Gy.value, peSign .* Result.Main.Gpe.value + Result.Main.Gpe.increment .* n];
-                    end;
-                    Output.Main.Gy.repeat = 1;
-
-                    Output.Main.Gx.value = Result.Main.Gss.value;
-                    Output.Main.Gx.repeat = Result.Main.repeat;
-
-                case {'F--H','H--F'}
-                    Output.Main.Gy.value = Result.Main.Gfe.value;
-                    Output.Main.Gy.repeat = Result.Main.repeat;
-
-                    peSign = 1 - 2*strcmp(cell2mat(peDirection),'H--F');
-                    Result.Main.Gpe.increment = peSign .* tempIncrement;
-                    Output.Main.Gz.value = peSign .* Result.Main.Gpe.value;
-                    for n=1:(Result.Main.repeat-1)
-                        Output.Main.Gz.value = [Output.Main.Gz.value, peSign .* Result.Main.Gpe.value + Result.Main.Gpe.increment .* n];
-                    end;
-                    Output.Main.Gz.repeat = 1;
-
-                    Output.Main.Gx.value = Result.Main.Gss.value;
-                    Output.Main.Gx.repeat = Result.Main.repeat;
-            end;
-            
-            
-        case 3 % Coronal 
-            switch cell2mat(peDirection)                    
-                case {'L--R','R--L'}
-                    Output.Main.Gz.value = Result.Main.Gfe.value;
-                    Output.Main.Gz.repeat = Result.Main.repeat;
-
-                    peSign = 1 - 2*strcmp(cell2mat(peDirection),'R--L');
-                    Result.Main.Gpe.increment = peSign .* tempIncrement;
-                    Output.Main.Gx.value = peSign .* Result.Main.Gpe.value;
-                    for n=1:(Result.Main.repeat-1)
-                        Output.Main.Gx.value = [Output.Main.Gx.value, peSign .* Result.Main.Gpe.value + Result.Main.Gpe.increment .* n];
-                    end;
-                    Output.Main.Gx.repeat = 1;
-
-                    Output.Main.Gy.value = Result.Main.Gss.value;
-                    Output.Main.Gy.repeat = Result.Main.repeat;
-
-                case {'F--H','H--F'}
-                    Output.Main.Gx.value = Result.Main.Gfe.value;
-                    Output.Main.Gx.repeat = Result.Main.repeat;
-
-                    peSign = 1 - 2*strcmp(cell2mat(peDirection),'H--F');
-                    Result.Main.Gpe.increment = peSign .* tempIncrement;
-                    Output.Main.Gz.value = peSign .* Result.Main.Gpe.value;
-                    for n=1:(Result.Main.repeat-1)
-                        Output.Main.Gz.value = [Output.Main.Gz.value, peSign .* Result.Main.Gpe.value + Result.Main.Gpe.increment .* n];
-                    end;
-                    Output.Main.Gz.repeat = 1;
-
-                    Output.Main.Gy.value = Result.Main.Gss.value;
-                    Output.Main.Gy.repeat = Result.Main.repeat;
-            end;            
-    end;
+    Output.Main.(pe).value = peSign .* Result.Main.Gpe.value;
+    for n = 1:(Result.Main.repeat-1)
+        Output.Main.(pe).value = [Output.Main.(pe).value, ...
+            peSign .* (Result.Main.Gpe.value + increment .* n)];
     end
-    
+    Output.Main.(pe).repeat = 1;
+    Output.Main.(ss).value = Result.Main.Gss.value;
+    Output.Main.(ss).repeat = Result.Main.repeat;
+
     % Dummy
     if dummy>0
         Output.Dummy.Time.value = [Result.Dummy.tAbs(1),diff(Result.Dummy.tAbs)];
@@ -279,12 +185,12 @@ function Output = combineSeqRect(interSeqData,orientation,peDirection,dummy,pres
         end;
         
         %%
-        Output.Dummy.Gx.value = Result.Dummy.Gfe.value;
-        Output.Dummy.Gx.repeat = Result.Dummy.repeat;
-        Output.Dummy.Gy.value = Result.Dummy.Gpe.value;
-        Output.Dummy.Gy.repeat = Result.Dummy.repeat;
-        Output.Dummy.Gz.value = Result.Dummy.Gss.value;
-        Output.Dummy.Gz.repeat = Result.Dummy.repeat;
+        Output.Dummy.(fe).value = Result.Dummy.Gfe.value;
+        Output.Dummy.(fe).repeat = Result.Dummy.repeat;
+        Output.Dummy.(pe).value = peSign .* Result.Dummy.Gpe.value;
+        Output.Dummy.(pe).repeat = Result.Dummy.repeat;
+        Output.Dummy.(ss).value = Result.Dummy.Gss.value;
+        Output.Dummy.(ss).repeat = Result.Dummy.repeat;
     end;
     
     if dummy > 0
@@ -307,11 +213,11 @@ function Output = combineSeqRect(interSeqData,orientation,peDirection,dummy,pres
                 +...
             (length(Output.Dummy.RF.value) ~= length(Output.Dummy.DFreq.value)) + (Output.Dummy.RF.repeat ~= Output.Dummy.DFreq.repeat)...
                 +...
-            (length(Output.Dummy.Time.value) * Output.Dummy.Time.repeat ~= length(Output.Dummy.Gx.value) * Output.Dummy.Gx.repeat)...
+            (length(Output.Dummy.Time.value) * Output.Dummy.Time.repeat ~= length(Output.Dummy.(fe).value) * Output.Dummy.(fe).repeat)...
                 +...
-            (length(Output.Dummy.Time.value) * Output.Dummy.Time.repeat ~= length(Output.Dummy.Gy.value) * Output.Dummy.Gy.repeat)...
+            (length(Output.Dummy.Time.value) * Output.Dummy.Time.repeat ~= length(Output.Dummy.(pe).value) * Output.Dummy.(pe).repeat)...
                 +...
-            (length(Output.Dummy.Time.value) * Output.Dummy.Time.repeat ~= length(Output.Dummy.Gz.value) * Output.Dummy.Gz.repeat);
+            (length(Output.Dummy.Time.value) * Output.Dummy.Time.repeat ~= length(Output.Dummy.(ss).value) * Output.Dummy.(ss).repeat);
             if hasError
                 error('Sequence channel lengths are inconsistent.');
             end

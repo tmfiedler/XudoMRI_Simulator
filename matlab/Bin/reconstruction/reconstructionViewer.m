@@ -307,29 +307,36 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
         totalSamples = size(signalData,1);
         logRadialReco('Loaded signal data size: %s totalSamples=%d',reconstructionSizeString(signalData),totalSamples);
 
-        sequenceType = strtrim(protocol.SequenceType);
-        if ~usesRadial3DWorkflow(sequenceType)
+        radial = usesRadial3DWorkflow(protocol.SequenceType);
+        offset = protocol.FOVOffset;
+        if ~radial
+            [~,orientation] = ismember(protocol.SliceOrientation,{'Axial','Sagittal','Coronal'});
+            axesXYZ = cartesianAxes(orientation,false);
+            offset(axesXYZ(3)) = 0;
+        end
+
+        if radial || any(offset)
+            trajFileName = resolveCompanionTrajectoryFile(dataFileName,selectedFiles);
+            if exist(trajFileName,'file') ~= 2
+                [trajName,trajPath,trajIndex] = uigetfile('*.ktrj','OPEN: Trajectory File',dataPath);
+                if isequal(trajIndex,0)
+                    setStatus(hFig,'Status: trajectory selection cancelled');
+                    return;
+                end
+                trajFileName = fullfile(trajPath,trajName);
+            end
+            protocol.TrajectoryFile = trajFileName;
+            updateBusyState(hFig,'Loading trajectory data...');
+            trajFlat = loadTrajectoryFile(trajFileName,totalSamples);
+            if any(offset)
+                protocol.FOVPhase = fovCenterPhase(trajFlat,offset,protocol.ModelSpacing);
+            end
+        end
+
+        if ~radial
             loadCartesianReconstruction(hFig,state,protocol,signalData,dataPath,selectedFiles);
             return;
         end
-
-        trajFileName = resolveCompanionTrajectoryFile(dataFileName,selectedFiles);
-        logRadialReco('Resolved trajectory file: %s',trajFileName);
-        if exist(trajFileName,'file') ~= 2
-            [trajName,trajPath,trajIndex] = uigetfile('*.ktrj','OPEN: Trajectory File',dataPath);
-            if isequal(trajIndex,0)
-                logRadialReco('Trajectory selection cancelled');
-                setStatus(hFig,'Status: trajectory selection cancelled');
-                return;
-            end
-            trajFileName = fullfile(trajPath,trajName);
-            logRadialReco('User-selected trajectory file: %s',trajFileName);
-        end
-        protocol.TrajectoryFile = trajFileName;
-
-        updateBusyState(hFig,'Loading trajectory data...');
-        trajFlat = loadTrajectoryFile(trajFileName,totalSamples);
-        logRadialReco('Loaded trajectory size: %s',reconstructionSizeString(trajFlat));
 
         [samplesPerSpoke,numSpokes,reconSize] = inferRadialDimensions(protocol,totalSamples);
         logRadialReco('Inferred samplesPerSpoke=%d numSpokes=%d reconSize=%d',...
@@ -376,7 +383,6 @@ function loadCartesianReconstruction(hFig,state,protocol,signalData,dataPath,sel
 
     state = guidata(hFig);
     state.protocol = protocol;
-    state.protocol.TrajectoryFile = '';
     state.reconMode = 'cartesian';
     state.signalDataClean = signalData;
     state.cleanRecon = recon;
@@ -788,6 +794,9 @@ function recon = reconstructSignalDataset(state,signalData,reconContext)
         [~,reconContext] = getReconstructionContext(state);
     end
 
+    if isfield(state.protocol,'FOVPhase')
+        signalData = signalData .* state.protocol.FOVPhase;
+    end
     spokeData = reshapeSignalData(signalData,state.samplesPerSpoke,state.numSpokes);
     logRadialReco('Reshaped spoke data size: %s',reconstructionSizeString(spokeData));
     recon = reconstructRadialDataset(spokeData,reconContext,@logRadialReco);
@@ -1511,8 +1520,7 @@ function protocol = parseRadialProtocolFile(protFileName)
     protocol.SliceOrientation = 'Axial';
     protocol.PEDirection = 'P--A';
     protocol.FOVOffset = [0 0 0];
-    protocol.SampleMin = [NaN NaN NaN];
-    protocol.SampleMax = [NaN NaN NaN];
+    protocol.ModelSpacing = [NaN NaN NaN];
 
     fid = fopen(protFileName,'r');
     if fid == -1
@@ -1547,11 +1555,8 @@ function protocol = parseRadialProtocolFile(protFileName)
             case 'FOV Offset:'
                 protocol.FOVOffset = readProtocolXYZ(fid,'FOV Offset');
 
-            case 'Sample Min:'
-                protocol.SampleMin = readProtocolXYZ(fid,'Sample Min');
-
-            case 'Sample Max:'
-                protocol.SampleMax = readProtocolXYZ(fid,'Sample Max');
+            case 'Model Res.:'
+                protocol.ModelSpacing = readProtocolXYZ(fid,'Model Res.');
         end
         protLine = fgetl(fid);
     end

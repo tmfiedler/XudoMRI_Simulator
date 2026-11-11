@@ -180,7 +180,8 @@ temp001 = temp001+82+hGap; temp002 = .915*temp02-vGap-3;
 % % % Display Match button.
 hMatch=uicontrol(hMain,'Style','pushbutton','string','Match',...
     'Position',[temp001 temp002 52 13+7],...
-    'BackgroundColor',[1,1,1],'Callback',{@Match_Callback,''});
+    'BackgroundColor',[1,1,1],'TooltipString','Fit the signal box to the FOV with two voxels of padding per side.', ...
+    'Callback',{@Match_Callback,''});
 
 temp001 = rightControlX; temp002 = temp002-vGap+3;
 % % % Display GeoSliderTH.
@@ -1204,7 +1205,6 @@ reset();
             
             GeoSliceTHEdit_Callback(source,eventdata,protocol.sliceThicknessText());
         
-            GeoSlider_Callback(source,eventdata,protocol.slicePositionText());
             XMin_Callback(source,eventdata,protocol.xMinText());
             YMin_Callback(source,eventdata,protocol.yMinText());
             ZMin_Callback(source,eventdata,protocol.zMinText());
@@ -1224,6 +1224,13 @@ reset();
             B0Edit_Callback(source,eventdata,protocol.b0Text());
             Nucleus_Callback(source,eventdata,protocol.nucleus());
             SeqType_Callback(source,eventdata,protocol.sequenceType());
+            if ~protocol.hasUnifiedFOV || is3DRadSequenceName(getCurrentSequenceName())
+                savedPosition = str2double(protocol.slicePositionText());
+                if isreal(savedPosition) && isfinite(savedPosition)
+                    setSlicePosition(savedPosition);
+                end
+            end
+            syncSlicePosition();
             RF_Shape_Callback(source,eventdata,protocol.rfShape());
             RF_Duration_Callback(source,eventdata,protocol.rfDurationText());
             RF_Num_Callback(source,eventdata,protocol.rfCountText());
@@ -1273,7 +1280,8 @@ reset();
             updateBusyState('Restoring sequence preview...');
             restoreLoadedSequencePreview();
             updateTargetFlipAngleDisplay();
-            if radialAxesRestored
+            slice = readSequenceSlice(inputInfo);
+            if radialAxesRestored || (~protocol.hasUnifiedFOV && slice.offset ~= 0)
                 markSequenceDirty();
             else
                 markSequenceClean();
@@ -1319,6 +1327,10 @@ reset();
             markSequenceDirty();
         end
         showSaveBusy = strcmp(flag,'');
+        if showSaveBusy && ~isempty(inputCmd{4,1}) && ...
+                ~ensureCurrentSequence(source,eventdata,'saving','Save cancelled')
+            return;
+        end
         if showSaveBusy
             beginBusyState('Saving protocol...');
             saveBusyCleanup = onCleanup(@() endBusyState()); %#ok<NASGU>
@@ -1583,7 +1595,6 @@ reset();
             inputInfo.widZ = fread(fid,1,'float32');
             set(hZWid,'String',sprintf('%.9g',inputInfo.widZ),'Enable','inactive');
             
-            inputInfo.FOV_flag=0;
 
             inputGeoData = fread(fid,[4, Inf],'float32');
             fclose(fid);
@@ -1627,22 +1638,13 @@ reset();
             displayInfo.padCoronal_X = ceil((displayInfo.imageLengthXZ - displayInfo.geoLengthX)/2);
             displayInfo.padCoronal_Z = ceil((displayInfo.imageLengthXZ - displayInfo.geoLengthZ)/2);
 
-            inputInfo.currentX = round((inputInfo.maxX+inputInfo.minX)/2);
-            inputInfo.currentY = round((inputInfo.maxY+inputInfo.minY)/2);
-            inputInfo.currentZ = round((inputInfo.maxZ+inputInfo.minZ)/2);
+            syncSlicePosition();
 
             set(hGeoSliceTH,'Enable','on');
-            switch get(hOrientationMenu,'Value')
-                case 1
-                    set(hGeoSliceTH,'String',num2str(inputInfo.widZ));
-                    inputInfo.sliceTH = inputInfo.widZ;
-                case 2
-                    set(hGeoSliceTH,'String',num2str(inputInfo.widY));
-                    inputInfo.sliceTH = inputInfo.widX;
-                case 3
-                    set(hGeoSliceTH,'String',num2str(inputInfo.widX));
-            inputInfo.sliceTH = inputInfo.widY;
-            end;
+            axesXYZ = cartesianAxes(get(hOrientationMenu,'Value'),false);
+            spacing = [inputInfo.widX, inputInfo.widY, inputInfo.widZ];
+            inputInfo.sliceTH = spacing(axesXYZ(3));
+            set(hGeoSliceTH,'String',num2str(inputInfo.sliceTH,'%.9g'));
             inputInfo.FOV = str2double(get(hFOV,'String'));
 
             if strcmp(flag,'')==1
@@ -1659,27 +1661,6 @@ reset();
             set(hGeoSliderEdit,'Enable','on');
             set(hScaleMenu,'Enable','on');
 
-            % % % Display GeoSlider.
-            switch get(hOrientationMenu,'Value')
-                case 1
-                    set(hGeoSlider,'Max',displayInfo.maxZ,...
-                        'Min',displayInfo.minZ,...
-                        'Value',inputInfo.currentZ,...
-                        'SliderStep',[1/(displayInfo.maxZ-displayInfo.minZ),1/10]);
-                    set(hGeoSliderEdit,'String',num2str(inputInfo.currentZ));
-                case 2
-                    set(hGeoSlider,'Max',displayInfo.maxX,...
-                        'Min',displayInfo.minX,...
-                        'Value',inputInfo.currentX,...
-                        'SliderStep',[1/(displayInfo.maxX-displayInfo.minX),1/10]);
-                    set(hGeoSliderEdit,'String',num2str(inputInfo.currentX));
-                case 3
-                    set(hGeoSlider,'Max',displayInfo.maxY,...
-                        'Min',displayInfo.minY,...
-                        'Value',inputInfo.currentY,...
-                        'SliderStep',[1/(displayInfo.maxY-displayInfo.minY),1/10]);
-                    set(hGeoSliderEdit,'String',num2str(inputInfo.currentY));
-            end;
             updateFieldViewerButtonState();
         end;
     end
@@ -2317,208 +2298,96 @@ reset();
     function OrientationMenu_Callback(source,eventdata,flag) %#ok<INUSL>
         global geoData inputInfo displayInfo;
         
-        if strcmp(flag,'')==1
-            % % % Update GeoSlider.
-            switch get(hOrientationMenu,'Value')
-                case 1
-                    set(hGeoSlider,'Max',displayInfo.maxZ,...
-                        'Min',displayInfo.minZ,...
-                        'Value',inputInfo.currentZ,...
-                        'SliderStep',[1/(displayInfo.maxZ-displayInfo.minZ),1/10]);
-                    set(hPEDirectMenu,'String',{'P--A';'A--P';'L--R';'R--L'});
-
-                case 2
-                    set(hGeoSlider,'Max',displayInfo.maxX,...
-                        'Min',displayInfo.minX,...
-                        'Value',inputInfo.currentX,...
-                        'SliderStep',[1/(displayInfo.maxX-displayInfo.minX),1/10]);
-                    set(hPEDirectMenu,'String',{'P--A';'A--P';'F--H';'H--F'});
-
-                case 3
-                    set(hGeoSlider,'Max',displayInfo.maxY,...
-                        'Min',displayInfo.minY,...
-                        'Value',inputInfo.currentY,...
-                        'SliderStep',[1/(displayInfo.maxY-displayInfo.minY),1/10]);
-                    set(hPEDirectMenu,'String',{'L--R';'R--L';'F--H';'H--F'});
-            end;
-            displayImages(hImages,inputInfo,displayInfo,get(hOrientationMenu,'Value'),geoData);
+        if ~isempty(flag)
+            orientations = get(hOrientationMenu,'String');
+            set(hOrientationMenu,'Value',find(strcmp(orientations,flag),1));
+        end
+        setCartesianPEDirectionOptions();
+        syncSlicePosition();
+        if isempty(flag)
+            refreshGeometryDisplay();
             markSequenceDirty();
-        else
-            switch flag
-                case 'Axial'
-                    set(hGeoSlider,'Max',displayInfo.maxZ,...
-                        'Min',displayInfo.minZ,...
-                        'Value',inputInfo.currentZ,...
-                        'SliderStep',[1/(displayInfo.maxZ-displayInfo.minZ),1/10]);
-                    set(hOrientationMenu,'Value',1);
-                    set(hPEDirectMenu,'String',{'P--A';'A--P';'L--R';'R--L'});
-
-                case 'Sagittal'
-                    set(hGeoSlider,'Max',displayInfo.maxX,...
-                        'Min',displayInfo.minX,...
-                        'Value',inputInfo.currentX,...
-                        'SliderStep',[1/(displayInfo.maxX-displayInfo.minX),1/10]);
-                    set(hOrientationMenu,'Value',2);
-                    set(hPEDirectMenu,'String',{'P--A';'A--P';'F--H';'H--F'});
-
-                case 'Coronal'
-                    set(hGeoSlider,'Max',displayInfo.maxY,...
-                        'Min',displayInfo.minY,...
-                        'Value',inputInfo.currentY,...
-                        'SliderStep',[1/(displayInfo.maxY-displayInfo.minY),1/10]);
-                    set(hOrientationMenu,'Value',3);
-                    set(hPEDirectMenu,'String',{'L--R';'R--L';'F--H';'H--F'});
-            end;
-        end;
-        
-        set(hGeoSliderEdit,'String',get(hGeoSlider,'Value'));
+        end
     end
 
-    %% --- Executes on GeoSliceTHEdit.
     function GeoSliceTHEdit_Callback(source,eventdata,flag) %#ok<INUSL>
-        global geoData inputInfo displayInfo;
-        
-        if strcmp(flag,'')==1      
-            temp = str2double(get(hGeoSliceTH,'String'));
-            if ~isnan(temp)        
-                switch get(hOrientationMenu,'Value')
-                    case 1
-                        temp = inputInfo.widX;
-                        temp = round(str2double(get(hGeoSliceTH, 'String'))/temp)*temp;
-                        if temp == 0
-                            temp = inputInfo.widX;
-                        end;
-                    case 2
-                        temp = inputInfo.widZ;
-                        temp = round(str2double(get(hGeoSliceTH, 'String'))/temp)*temp;
-                        if temp == 0
-                            temp = inputInfo.widZ;
-                        end;
-                    case 3
-                        temp = inputInfo.widY;
-                        temp = round(str2double(get(hGeoSliceTH, 'String'))/temp)*temp;
-                        if temp == 0
-                            temp = inputInfo.widY;
-                        end;
-                end;
-                set(hGeoSliceTH,'String',num2str(abs(temp)));
+        global inputInfo;
+        if isempty(flag)
+            flag = get(hGeoSliceTH,'String');
+        end
+        thickness = str2double(flag);
+        if ~isreal(thickness) || ~isfinite(thickness) || thickness <= 0
+            thickness = inputInfo.sliceTH;
+        end
+        inputInfo.sliceTH = thickness;
+        set(hGeoSliceTH,'String',num2str(thickness,'%.9g'));
+        refreshGeometryDisplay();
+        markSequenceDirty();
+    end
+
+    function GeoSlider_Callback(source,eventdata,flag) %#ok<INUSD>
+        changeSlicePosition(get(hGeoSlider,'Value'));
+    end
+
+    function GeoSliderEdit_Callback(source,eventdata,flag) %#ok<INUSD>
+        changeSlicePosition(str2double(get(hGeoSliderEdit,'String')));
+    end
+
+    function changeSlicePosition(position)
+        if isreal(position) && isfinite(position)
+            setSlicePosition(position);
+            if ~is3DRadSequenceName(getCurrentSequenceName())
+                markSequenceDirty();
+            end
+        end
+        updateSliceDisplay();
+    end
+
+    function updateSliceDisplay()
+        syncSlicePosition();
+        if rebuildDisplayedGeometry(get(hDisplayMenu,'Value'))
+            refreshGeometryDisplay();
+        end
+    end
+
+    function setSlicePosition(position)
+        global inputInfo;
+        axesXYZ = cartesianAxes(get(hOrientationMenu,'Value'),false);
+        axisName = 'XYZ';
+        axisName = axisName(axesXYZ(3));
+        if is3DRadSequenceName(getCurrentSequenceName())
+            inputInfo.(['current',axisName]) = round(position);
+        else
+            field = ['set',axisName];
+            inputInfo.(field) = round(position) - inputInfo.(['ctr',axisName]);
+            offsets = [hXSet,hYSet,hZSet];
+            set(offsets(axesXYZ(3)),'String',num2str(inputInfo.(field)));
+        end
+    end
+
+    function syncSlicePosition()
+        global inputInfo displayInfo;
+        axesXYZ = cartesianAxes(get(hOrientationMenu,'Value'),false);
+        axisNames = 'XYZ';
+        radial = is3DRadSequenceName(getCurrentSequenceName());
+        for axisName = axisNames
+            current = ['current',axisName];
+            lo = displayInfo.(['min',axisName]);
+            hi = displayInfo.(['max',axisName]);
+            if radial && isfield(inputInfo,current)
+                position = inputInfo.(current);
             else
-                set(hGeoSliceTH,'String','2');
-                temp = 2;
-            end;                        
-
-            slice.TH = temp;
-            inputInfo.sliceTH = temp;
-            displayImages(hImages,inputInfo,displayInfo,get(hOrientationMenu,'Value'),geoData);
-            markSequenceDirty();
-        else
-            switch get(hOrientationMenu,'Value')
-                case 1
-                    temp = inputInfo.widX;
-                    temp = round(str2double(flag)/temp)*temp;
-                case 2
-                    temp = inputInfo.widZ;
-                    temp = round(str2double(flag)/temp)*temp;
-                case 3
-                    temp = inputInfo.widY;
-                    temp = round(str2double(flag)/temp)*temp;
-            end;   
-            set(hGeoSliceTH,'String',num2str(temp));
-            slice.TH = temp;
-            inputInfo.sliceTH = temp;
-        end;
-    end
-
-    %% --- Executes on GeoSlider.
-    function GeoSlider_Callback(source,eventdata,flag) %#ok<INUSL>
-        global geoData inputInfo displayInfo inputGeoData;
-
-        if strcmp(flag,'')==1
-            temp = round(get(hGeoSlider,'Value'));
-            set(hGeoSlider,'Value',temp);
-            set(hGeoSliderEdit,'String',num2str(get(hGeoSlider,'Value')));
-            switch get(hOrientationMenu,'Value')
-                case 1
-                    inputInfo.currentZ = temp;
-                case 2
-                    inputInfo.currentX = temp;
-                case 3
-                    inputInfo.currentY = temp;
-            end;
-                    
-            temp = get(hDisplayMenu,'Value');
-            if rebuildDisplayedGeometry(temp)
-                refreshGeometryDisplay();
+                position = inputInfo.(['ctr',axisName]) + inputInfo.(['set',axisName]);
             end
-            markSequenceDirty();
-        else
-            set(hGeoSlider,'Value',str2double(flag));
-            set(hGeoSliderEdit,'String',flag);
-            switch get(hOrientationMenu,'Value')
-                case 1
-                    inputInfo.currentZ = str2double(flag);
-                case 2
-                    inputInfo.currentX = str2double(flag);
-                case 3
-                    inputInfo.currentY = str2double(flag);
-            end;            
-        end;
-    end
-
-    %% --- Executes on GeoSliderEdit.
-    function GeoSliderEdit_Callback(source,eventdata,flag) %#ok<INUSL>
-        global geoData inputInfo displayInfo inputGeoData;
-
-        if strcmp(flag,'')==1
-            temp = round(str2double(get(hGeoSliderEdit,'String')));
-
-            switch get(hOrientationMenu,'Value')
-                case 1
-%                     if temp > inputInfo.maxZ
-%                         temp = inputInfo.maxZ;
-%                     end;
-%                     if temp < inputInfo.minZ
-%                         temp = inputInfo.minZ;
-%                     end;
-                    inputInfo.currentZ = temp;
-                case 2
-%                     if temp > inputInfo.maxX
-%                         temp = inputInfo.maxX;
-%                     end;
-%                     if temp < inputInfo.minX
-%                         temp = inputInfo.minX;
-%                     end;
-                    inputInfo.currentX = temp;
-                case 3
-%                     if temp > inputInfo.maxY
-%                         temp = inputInfo.maxY;
-%                     end;
-%                     if temp < inputInfo.minY
-%                         temp = inputInfo.minY;
-%                     end;
-                    inputInfo.currentY = temp;
-            end;
-
-            set(hGeoSliderEdit,'String',num2str(temp));
-            set(hGeoSlider,'Value',temp);
-            
-            temp = get(hDisplayMenu,'Value');
-            if rebuildDisplayedGeometry(temp)
-                refreshGeometryDisplay();
+            inputInfo.(current) = min(hi,max(lo,position));
+            if axisName == axisNames(axesXYZ(3))
+                % The edit can prescribe outside the model while the view stays inside.
+                step = 1/max(1,hi-lo);
+                set(hGeoSlider,'Min',lo,'Max',max(lo+1,hi), ...
+                    'Value',inputInfo.(current),'SliderStep',[step,max(step,0.1)]);
+                set(hGeoSliderEdit,'String',num2str(position));
             end
-            markSequenceDirty();
-        else
-            set(hGeoSlider,'Value',str2double(flag));
-            set(hGeoSliderEdit,'String',flag);
-            switch get(hOrientationMenu,'Value')
-                case 1
-                    inputInfo.currentZ = str2double(flag);
-                case 2
-                    inputInfo.currentX = str2double(flag);
-                case 3
-                    inputInfo.currentY = str2double(flag);
-            end;            
-        end;
+        end
     end
 
     %% --- Executes on xMin_edit.
@@ -2677,7 +2546,7 @@ reset();
                     if ~isnan(temp)
                         inputInfo.ctrX = temp;
                         set(hXCtr,'String',num2str(temp));
-                        refreshGeometryDisplay();
+                        updateSliceDisplay();
                     else
                         temp = inputInfo.ctrX;
                         set(hXCtr,'String',num2str(temp));
@@ -2696,7 +2565,7 @@ reset();
                 if ~isnan(temp)
                     inputInfo.ctrX = temp;
                     set(hXCtr,'String',num2str(temp));
-                    refreshGeometryDisplay();
+                    updateSliceDisplay();
                 else
                     temp = inputInfo.ctrX;
                     set(hXCtr,'String',num2str(temp));
@@ -2719,7 +2588,7 @@ reset();
                     if ~isnan(temp)
                         inputInfo.ctrY = temp;
                         set(hYCtr,'String',num2str(temp));
-                        refreshGeometryDisplay();
+                        updateSliceDisplay();
                     else
                         temp = inputInfo.ctrY;
                         set(hYCtr,'String',num2str(temp));
@@ -2738,7 +2607,7 @@ reset();
                 if ~isnan(temp)
                     inputInfo.ctrY = temp;
                     set(hYCtr,'String',num2str(temp));
-                    refreshGeometryDisplay();
+                    updateSliceDisplay();
                 else
                     temp = inputInfo.ctrY;
                     set(hYCtr,'String',num2str(temp));
@@ -2760,9 +2629,9 @@ reset();
                 if strcmp(flag,'')==1
                     temp = round(str2double(get(hZCtr, 'String')));
                     if ~isnan(temp)
-                        inputInfo.ctrX = temp;
+                        inputInfo.ctrZ = temp;
                         set(hZCtr,'String',num2str(temp));
-                        refreshGeometryDisplay();
+                        updateSliceDisplay();
                     else
                         temp = inputInfo.ctrZ;
                         set(hZCtr,'String',num2str(temp));
@@ -2781,7 +2650,7 @@ reset();
                 if ~isnan(temp)
                     inputInfo.ctrZ = temp;
                     set(hZCtr,'String',num2str(temp));
-                    refreshGeometryDisplay();
+                    updateSliceDisplay();
                 else
                     temp = inputInfo.ctrZ;
                     set(hZCtr,'String',num2str(temp));
@@ -2793,51 +2662,34 @@ reset();
         end
     end
 
-    %% --- Executes on xSet_edit.
     function XSet_Callback(source,eventdata,flag) %#ok<INUSL>
-        global geoData inputInfo displayInfo;
-        
-        if strcmp(flag,'')==1
-            temp = round(str2double(get(hXSet, 'String')));
-            set(hXSet,'String',num2str(temp));
-            inputInfo.setX = str2double(get(hXSet, 'String'));
-            refreshGeometryDisplay();
-        else
-            set(hXSet,'String',flag);
-            inputInfo.setX = round(str2double(get(hXSet, 'String')));
-        end;
+        changeFOVOffset(hXSet,'setX',flag);
     end
 
-    %% --- Executes on ySet_edit.
     function YSet_Callback(source,eventdata,flag) %#ok<INUSL>
-        global geoData inputInfo displayInfo;
-        
-        if strcmp(flag,'')==1
-            temp = round(str2double(get(hYSet, 'String')));
-            set(hYSet,'String',num2str(temp));
-            inputInfo.setY = str2double(get(hYSet, 'String'));
-            refreshGeometryDisplay();
-        else
-            set(hYSet,'String',flag);
-            inputInfo.setY = round(str2double(get(hYSet, 'String')));
-        end;
+        changeFOVOffset(hYSet,'setY',flag);
     end
 
-    %% --- Executes on zSet_edit.
     function ZSet_Callback(source,eventdata,flag) %#ok<INUSL>
-        global geoData inputInfo displayInfo;
-        
-        if strcmp(flag,'')==1
-            temp = round(str2double(get(hZSet, 'String')));
-            set(hZSet,'String',num2str(temp));
-            inputInfo.setZ = str2double(get(hZSet, 'String'));
-            refreshGeometryDisplay();
-        else
-            set(hZSet,'String',flag);
-            inputInfo.setZ = round(str2double(get(hZSet, 'String')));
-        end;
+        changeFOVOffset(hZSet,'setZ',flag);
     end
 
+    function changeFOVOffset(control,field,flag)
+        global inputInfo;
+        if isempty(flag)
+            value = str2double(get(control,'String'));
+        else
+            value = str2double(flag);
+        end
+        if isreal(value) && isfinite(value)
+            inputInfo.(field) = round(value);
+        end
+        set(control,'String',num2str(inputInfo.(field)));
+        if isempty(flag)
+            updateSliceDisplay();
+            markSequenceDirty();
+        end
+    end
 
     %% Sequence and imaging controls
     % --- Executes on hSeqType_Menu.
@@ -2848,6 +2700,7 @@ reset();
             updateSequenceSpecificFieldLabels();
             updateSeq();
             if ~isempty(geoData)
+                syncSlicePosition();
                 refreshGeometryDisplay();
             end
         else
@@ -3150,23 +3003,14 @@ reset();
     function Match_Callback(source,eventdata,flag) %#ok<INUSD>
         global geoData inputInfo displayInfo;
         bufferVoxels = 2;
-        center = [inputInfo.ctrX + inputInfo.setX, inputInfo.ctrY + inputInfo.setY, inputInfo.ctrZ + inputInfo.setZ];
-        voxelSize = [inputInfo.widX, inputInfo.widY, inputInfo.widZ];
+        [center,width] = fovBox(inputInfo,fovDisplaySettings(displayInfo),get(hOrientationMenu,'Value'));
         fullMin = [displayInfo.minX, displayInfo.minY, displayInfo.minZ];
         fullMax = [displayInfo.maxX, displayInfo.maxY, displayInfo.maxZ];
-
-        if is3DRadSequenceName(getCurrentSequenceName())
-            matchWidth = repmat(max([inputInfo.FOV(:).',1]),1,3);
-        else
-            matchWidth = getMatchWidthForCurrentOrientation();
-        end
-
-        minBounds = zeros(1,3);
-        maxBounds = zeros(1,3);
-        for axisIdx = 1:3
-            halfWidth = matchWidth(axisIdx) / (2 * voxelSize(axisIdx));
-            minBounds(axisIdx) = max(fullMin(axisIdx), round(center(axisIdx) - halfWidth) - bufferVoxels);
-            maxBounds(axisIdx) = min(fullMax(axisIdx), round(center(axisIdx) + halfWidth) - 1 + bufferVoxels);
+        minBounds = max(fullMin,floor(center-width/2+0.5)-bufferVoxels);
+        maxBounds = min(fullMax,ceil(center+width/2-0.5)+bufferVoxels);
+        if any(minBounds > maxBounds)
+            warnSetup('The FOV and its padding lie outside the available geometry.');
+            return;
         end
 
         inputInfo.minX = minBounds(1);
@@ -3186,64 +3030,6 @@ reset();
         refreshGeometryDisplay();
     end
 
-    function matchWidth = getMatchWidthForCurrentOrientation()
-        global inputInfo;
-        fov = inputInfo.FOV;
-        if isempty(fov)
-            fov = str2double(get(hFOV,'String'));
-        end
-        if isempty(fov) || any(isnan(fov(:)))
-            fov = [300 300];
-        end
-        if numel(fov) < 2
-            fov(2) = fov(1);
-        end
-        fov = max(fov(1:2),1);
-        sliceTH = 0;
-        if isfield(inputInfo,'sliceTH')
-            sliceTH = max(inputInfo.sliceTH,0);
-        end
-
-        switch get(hOrientationMenu,'Value')
-            case 1 % axial: in-plane X/Y, slice Z
-                sliceAxis = 3;
-                if get(hPEDirectMenu,'Value') <= 2
-                    feAxis = 1;
-                    peAxis = 2;
-                else
-                    feAxis = 2;
-                    peAxis = 1;
-                end
-            case 2 % sagittal: in-plane Y/Z, slice X
-                sliceAxis = 1;
-                if get(hPEDirectMenu,'Value') <= 2
-                    feAxis = 3;
-                    peAxis = 2;
-                else
-                    feAxis = 2;
-                    peAxis = 3;
-                end
-            case 3 % coronal: in-plane X/Z, slice Y
-                sliceAxis = 2;
-                if get(hPEDirectMenu,'Value') <= 2
-                    feAxis = 3;
-                    peAxis = 1;
-                else
-                    feAxis = 1;
-                    peAxis = 3;
-                end
-        end
-
-        voxelSize = [inputInfo.widX, inputInfo.widY, inputInfo.widZ];
-        if sliceTH <= 0
-            sliceTH = voxelSize(sliceAxis);
-        end
-
-        matchWidth = zeros(1,3);
-        matchWidth(feAxis) = fov(1);
-        matchWidth(peAxis) = fov(2);
-        matchWidth(sliceAxis) = sliceTH;
-    end
     %% --- Executes on hFOV_Pop_popmenu.
     function FOV_Pop_Callback(source,eventdata,flag)
         global geoData inputInfo displayInfo;
@@ -3350,32 +3136,7 @@ reset();
     function FOV_Callback(source,eventdata,flag) %#ok<INUSL>
         global geoData inputInfo displayInfo;
         tempStr = get(hFOV_Pop,'value');
-        PE=get(hPEDirectMenu,'Value');
-        if tempStr==1 %user selected to edit the FE direction
-            temp=1;
-        else          %user selected to edit the PE direction
-            temp=2;
-        end
-        switch get(hOrientationMenu,'Value')
-            case 1 %axial
-                if PE <= 2 % P-A or A-P
-                    inputInfo.FOV_flag=2; %dimensions will be flipped to align graphic properly
-                else % L-R or R-L
-                    inputInfo.FOV_flag=1;
-                end
-            case 2 %sagital
-                if PE <= 2 % P-A or A-P
-                    inputInfo.FOV_flag=1;
-                else % F-H or H-F
-                    inputInfo.FOV_flag=2;
-                end
-            case 3 %coronal
-                if PE <= 2 % L-R or R-L
-                    inputInfo.FOV_flag=1;
-                else % F-H or H-F
-                    inputInfo.FOV_flag=2;
-                end
-        end
+        temp = tempStr;
         if strcmp(flag,'')==1
             FOV=get(hFOV,'value');
             if is3DRadSequenceName(getCurrentSequenceName())
@@ -3611,6 +3372,7 @@ reset();
     function SS_Callback(source,eventdata,flag) %#ok<INUSL>
         if strcmp(flag,'')==1
             updateSeq();
+            refreshGeometryDisplay();
         else
             set(hSS,'Value',str2double(flag)); 
         end;
@@ -4828,15 +4590,11 @@ end
     end
 
     function slice = readSequenceSlice(geometry)
-        slice.TH = str2double(get(hGeoSliceTH,'String'))/1000; % metres
-        switch get(hOrientationMenu,'Value')
-            case 1
-                slice.offset = (geometry.currentZ - geometry.ctrZ)*geometry.widZ/1000;
-            case 2
-                slice.offset = (geometry.currentX - geometry.ctrX)*geometry.widX/1000;
-            case 3
-                slice.offset = (geometry.currentY - geometry.ctrY)*geometry.widY/1000;
-        end
+        axesXYZ = cartesianAxes(get(hOrientationMenu,'Value'),false);
+        spacing = [geometry.widX, geometry.widY, geometry.widZ];
+        offsets = [geometry.setX, geometry.setY, geometry.setZ];
+        slice.TH = geometry.sliceTH/1000;
+        slice.offset = offsets(axesXYZ(3))*spacing(axesXYZ(3))/1000;
     end
 
     function varargout = dispatchSequence(sequenceName,sequenceIndex,settings,slice,TI)
@@ -5357,8 +5115,13 @@ end
     end
 
     function displayImages(hImages,inputInfo,displayInfo,selectView,geoData)
-        displayInfo.ActiveSequenceName = getCurrentSequenceName();
-        displayImagesCore(hImages,inputInfo,displayInfo,selectView,geoData);
+        displayImagesCore(hImages,inputInfo,fovDisplaySettings(displayInfo),selectView,geoData);
+    end
+
+    function info = fovDisplaySettings(info)
+        info.ActiveSequenceName = getCurrentSequenceName();
+        info.SwapInPlane = get(hPEDirectMenu,'Value') > 2;
+        info.SliceSelect = logical(get(hSS,'Value'));
     end
 
     function hImages = initializeGeometryPanels(hImages, hGeoPanel, showLabels)

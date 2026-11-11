@@ -68,6 +68,7 @@ for k = 1:size(fields,1)
     label = fields{k,2};
     protocol.(fields{k,1}) = @() valueAfter(label);
 end
+protocol.hasUnifiedFOV = any(strcmp(lines,'Unified FOV Prescription:'));
 protocol.txWeight = @readTxWeight;
 protocol.b1PlusFiles = @() filesBetween('B1p Filename:','E1p Filename:');
 protocol.e1PlusFiles = @() filesBetween('E1p Filename:','# Rx:');

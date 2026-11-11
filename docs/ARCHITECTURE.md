@@ -286,7 +286,7 @@ boundaries, with complete layouts/channel ordering in [FILE_FORMATS](FILE_FORMAT
 Model changes must account for z-only `NumIso` subdivision, x/y derivative
 sinc integration, separate sodium 60/40 states with shared T1/RF, and ideal
 missing-map defaults. CPU and CUDA must retain matching conventions. Spatial
-B0/B0Solver, gradient-error maps, FOV offsets and SAR remain deferred known-defect
+B0/B0Solver, gradient-error maps and SAR remain deferred known-defect
 or incomplete paths; the x-gradient perturbation setter is disabled.
 `B0Solver.m` and `sar.m` retain GUIDE `.fig` callback/tag dependencies.
 

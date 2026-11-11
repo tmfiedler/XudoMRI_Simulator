@@ -291,7 +291,8 @@ file. Radial reconstruction reads the trajectory; Cartesian reconstruction
 uses protocol matrix/order settings.
 
 These streams contain no matrix size, nucleus or orientation metadata. Keep
-the matching `.prot` with the results, and `.ktrj` for radial reconstruction.
+the matching `.prot` with the results, and `.ktrj` for radial reconstruction
+or a shifted Cartesian image center.
 A failed run may leave partial outputs; use results only after successful
 completion.
 The shared host export path rejects nonfinite computed signal/trajectory values
@@ -362,6 +363,11 @@ evaluation.
 | Geometry editor | Display, sample bounds, gradient isocenter, FOV offset and grid widths |
 | Imaging parameters | Nucleus/B0, sequence/RF settings, FOV, matrix, bandwidth and timing |
 | Program info | NumIso, CPU/backend selection, NEX, simulation mode and noise domain |
+
+`Unified FOV Prescription: 1` identifies Setup protocols where the X/Y/Z FOV
+offsets are authoritative. Values are in model voxels relative to the gradient
+isocenter. On opening a legacy Cartesian protocol, Setup derives the
+through-plane offset from the saved Slice Position and gradient isocenter.
 
 Noise uses three labels: `Noise Loading Domain:` is `Full` or `Cropped`;
 `Noise Crop Bounds:` holds `xmin ymin zmin xmax ymax zmax` in original voxel

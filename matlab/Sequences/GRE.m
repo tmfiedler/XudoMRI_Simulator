@@ -54,7 +54,6 @@ idealDephasing = 1;
                 end
             case 2 % 'Rect'
                 tempRF_Y = ones(1,RF.Num);
-                frqOffset = 0;
             case 3 % 'Gauss'
                 tempRF_Y = (gausswin(RF.Num))';
         end;
@@ -109,7 +108,7 @@ idealDephasing = 1;
         varargout{1}.Main.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0];
         if dummy>0
             varargout{1}.Dummy.DFreq.tStep = varargout{1}.Dummy.tStep;
-            varargout{1}.Dummy.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0];
+            varargout{1}.Dummy.DFreq.value = zeros(1,RF.Num+2);
         end;
         
         %% ADC

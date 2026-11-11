@@ -40,6 +40,7 @@ writeField('Slice Position:',protocol.slicePositionText);
 writeXYZ('Sample Min:','Min',{protocol.xMinText,protocol.yMinText,protocol.zMinText});
 writeXYZ('Sample Max:','Max',{protocol.xMaxText,protocol.yMaxText,protocol.zMaxText});
 writeXYZ('Grad. IsoCtr:','Ctr',{protocol.xCenterText,protocol.yCenterText,protocol.zCenterText});
+writeField('Unified FOV Prescription:','1');
 writeXYZ('FOV Offset:','Set',{protocol.xOffsetText,protocol.yOffsetText,protocol.zOffsetText});
 fprintf(fid,'  Filter:\n      0\n');
 writeXYZ('Model Res.:','Wid',{protocol.xWidthText,protocol.yWidthText,protocol.zWidthText});

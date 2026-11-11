@@ -59,7 +59,7 @@ for name = {'1H','23Na'}
     assert(max((pi*k*width).^2/6)<1e-6);
     base = -1i*sum(amplitude(:).*exp(1i*2*pi*(x(:)*width)*k),1).*decay;
 
-    for scenario = 1:3
+    for scenario = 1:4
         angle = 90; recovery = 1;
         if scenario == 1, angle = 30; end
         % Columns: ms, event, RF real/imag, carrier Hz, Gx/Gy/Gz mT/m.
@@ -72,15 +72,25 @@ for name = {'1H','23Na'}
             steps(2,2) = -2; % clear transverse state, preserve Mz
             recovery = 1-exp(-wait/t1);
         end
+        expectedK = [k;zeros(2,samples)];
+        extraArgs = {};
+        if scenario == 4
+            % Model z=0 is 25 mm above the overridden gradient isocenter.
+            % The carrier cancels the RF-time gradient field at that plane.
+            steps(1,5) = gamma*.01*.025;
+            steps(1,8) = 10;
+            extraArgs = {'zCtr=-25000'};
+            expectedK(3,:) = gamma*.01*tau*1e-3;
+        end
         writeSteps(fullfile(folder,'sequence.seqn'),steps);
         expected = base*sind(angle)*recovery;
         signals = cell(1,numel(backends));
         for b = 1:numel(backends)
             tag = sprintf('%s_case%d',backends{b},scenario);
-            [s,actualK] = simulate(repo,folder,backends{b},tag,nucleus);
+            [s,actualK] = simulate(repo,folder,backends{b},tag,nucleus,extraArgs{:});
             assert(numel(s)==samples && all(isfinite(s)),'Invalid signal payload.');
             err = max(abs(s(:).'-expected))/scale;
-            kerr = max(abs(actualK-[k;zeros(2,samples)]),[],'all');
+            kerr = max(abs(actualK-expectedK),[],'all');
             assert(err<=signalTolerance,'%s %s case%d signal error %.6g/S0.', ...
                 nucleus,backends{b},scenario,err);
             assert(kerr<=trajectoryTolerance,'Trajectory error %.6g cycles/m.',kerr);
@@ -128,14 +138,14 @@ end
 fprintf('PASS: requested backends and both nuclei. GUI/radial/noise coverage is separate.\n');
 end
 
-function [signal,k] = simulate(repo,folder,backend,tag,nucleus)
+function [signal,k] = simulate(repo,folder,backend,tag,nucleus,varargin)
 base = fullfile(folder,[tag '_' backend]);
 args = {['TissueTypeFile=' fullfile(folder,'tissue.prop')], ...
     ['GeometryFile=' fullfile(folder,'geometry.smpl')], ...
     ['SequenceFile=' fullfile(folder,'sequence.seqn')], ...
     ['B1PlusFile=' fullfile(folder,'transmit.bfld')], ...
     ['B1MinsFile=' fullfile(folder,'receive.bfld')],['Nucleus=' nucleus], ...
-    'B0=3','NumIso=1','Thread=2',['KSpaceFile=' base '.ksig'],['KMapFile=' base '.ktrj']};
+    'B0=3','NumIso=1','Thread=2',['KSpaceFile=' base '.ksig'],['KMapFile=' base '.ktrj'],varargin{:}};
 p = System.Diagnostics.Process;
 p.StartInfo.FileName = fullfile(repo,'engine','bin',['NutateSignal_' backend '.exe']);
 p.StartInfo.Arguments = strjoin(cellfun(@(s) ['"' s '"'],args,'UniformOutput',false),' ');
