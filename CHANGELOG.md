@@ -10,6 +10,7 @@ when their stored contract changes.
 
 ## Unreleased
 
+- Allow `.prop` tissue properties files anywhere under `protocols/` to be tracked in Git.
 
 ## 2026.0
 

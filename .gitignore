@@ -7,14 +7,14 @@
 .idea/
 /.local-archive/
 
-# Private studies and results stay local; ship one self-contained example.
-/protocols/*
+# Track tissue properties and the bundled example. Ignore other study files.
+/protocols/**
+!/protocols/**/
+!/protocols/**/*.prop
 !/protocols/README.md
-!/protocols/example/
 !/protocols/example/example.prot
 !/protocols/example/example.seqn
 !/protocols/example/geometry.smpl
-!/protocols/example/tissue.prop
 !/protocols/example/transmit.bfld
 !/protocols/example/receive.bfld
 
