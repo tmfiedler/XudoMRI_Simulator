@@ -1,9 +1,14 @@
 # Changelog
 
-Versions use `YYYY.X`: the year and a release number starting at zero each year
-(for example, `2026.0`, `2026.1`, then `2027.0`). Root `VERSION` is authoritative;
-builds do not increment it. Pending changes go under `Unreleased`. Release tags
-use `vYYYY.X` and are lightweight.
+Versions use `YYYY.X`, where `X` is the release number starting at zero each
+year (for example, `2026.0`, `2026.1`, then `2027.0`). The root `VERSION` file is
+authoritative, and builds leave it unchanged.
+
+Develop each release on a branch named for its target version, such as `2026.1`.
+Set `VERSION` to the target at the start and record changes under `Unreleased`.
+`main` carries the current release until the next one is ready. At release time,
+move the pending entries into a dated section, merge the branch into `main`,
+and add a lightweight `vYYYY.X` tag to the release commit.
 
 File-format versions are independent: new formats start at V1 and increment
 when their stored contract changes.

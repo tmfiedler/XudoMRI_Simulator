@@ -136,12 +136,16 @@ Consult the methods guide before changing physical calculations. In particular:
   incomplete or known-defect paths. Radial reconstruction is quick-look
   gridding. Do not present these as validated scanner models or silently enable
   deferred features; see the methods guide and the [SAR task](TODO.md).
-- Keep `VERSION` unchanged during ordinary development. When explicitly asked to
-  prepare a release, run relevant release checks, set `VERSION` to the specified
-  `YYYY.X`, move pending changelog entries into a dated release section, leave an
-  empty Unreleased section, and report the prepared changes. When the user also
-  explicitly asks to commit the release, commit the release changes and create
-  a lightweight `vYYYY.X` tag. Never push or publish without explicit instructions.
+- Set `VERSION` to the target `YYYY.X` when starting development for that
+  release on its own branch. Record changes under Unreleased during development.
+  Keep `main` at the current release version until the next release is ready to
+  merge.
+- When explicitly asked to prepare a release, run relevant release checks,
+  verify that `VERSION` matches the target `YYYY.X`, move pending changelog
+  entries into a dated release section, leave an empty Unreleased section, and
+  report the prepared changes. When the user also explicitly asks to commit the
+  release, commit the release changes and create a lightweight `vYYYY.X` tag on
+  the commit being released. Never push or publish without explicit instructions.
 - Summarize what changed and why, checks performed and unresolved
   limitations. Include the commit SHA if a commit was requested and created. Do
   not claim release-wide scientific validation without explicit scope.
