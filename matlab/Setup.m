@@ -992,12 +992,16 @@ reset();
         global inputInfo;
         global displayInfo;
         
-        [fileName,pathName,index]=uigetfile( ...
+        [fileName,pathName] = uigetfile( ...
             {'*.prot','Protocol File (*.prot)';'*.*','All Files (*.*)'}, ...
             'OPEN: Protocol File',fullfile(protocolRoot,'*.prot'));
-        
-        % Read in data from selected file and set protocol
-        if index==1     % If *.prot file is selected
+
+        if ~isequal(fileName,0)
+            [~,~,extension] = fileparts(fileName);
+            if ~strcmpi(extension,'.prot')
+                errordlg('Select a protocol file with the .prot extension.','Invalid Protocol File','modal');
+                return;
+            end
             logSetup('Loading protocol: %s', [pathName,fileName]);
             beginBusyState('Loading protocol...');
             protocolBusyCleanup = onCleanup(@() endBusyState()); %#ok<NASGU>

@@ -24,6 +24,7 @@ when their stored contract changes.
 
 ### Fixes
 
+- Load protocol files selected through the All Files filter.
 - Show the selected FE or PE field of view when loading a protocol.
 - Keep Matrix Size edits in the selected FE or PE dimension regardless of orientation.
 - Offer to match the signal sample box when starting a run with a disjoint FOV.
