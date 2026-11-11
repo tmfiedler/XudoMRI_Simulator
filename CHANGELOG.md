@@ -10,6 +10,7 @@ when their stored contract changes.
 
 ## Unreleased
 
+- Keep Matrix Size edits in the selected FE or PE dimension regardless of orientation.
 - Offer to match the signal sample box when starting a run with a disjoint FOV.
 - Align the displayed FOV, RF slice, Match bounds and reconstructed image center for nonzero FOV offsets.
 - Allow `.prop` tissue properties files anywhere under `protocols/` to be tracked in Git.

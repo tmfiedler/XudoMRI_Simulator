@@ -3211,110 +3211,31 @@ reset();
             inputInfo.FOV = flag;
         end;
     end
-    %% --- Executes on hMatSize_Popupmenu.
-    function MatSize_Pop_Callback(source,eventdata,flag) %#ok<INUSL>
-        if strcmp(flag,'')==1
-            val = get(hMatSize_Pop,'Value');
-            MatSize=get(hMatSize,'value');
-            switch val
-                case 1   % User selected the first item
-                    if isempty(MatSize)
-                        MatSize=get(hMatSize,'Value');
-                        set(hMatSize,'value',MatSize);
-                    else
-                        set(hMatSize,'string',sprintf('%1.0f',MatSize(1)));
-                    end
-                case 2   % User selected the second item
-                    if isempty(MatSize)
-                        MatSize=get(hMatSize,'Value');
-                        set(hMatSize,'string',sprintf('%1.0f',MatSize));
-                    else
-                        if length(MatSize)>1
-                            set(hMatSize,'string',sprintf('%1.0f',MatSize(2)));
-                        else
-                            MatSize(2)=MatSize;
-                            set(hMatSize,'string',sprintf('%1.0f',MatSize(2)));
-                            set(hMatSize,'value',MatSize);
-                        end
-                    end  
-            end
-        end
-
+    %% Matrix size is stored in logical FE/PE order (samples/spokes for radial).
+    function MatSize_Pop_Callback(source,eventdata,flag) %#ok<INUSD>
+        matrixSize = get(hMatSize,'Value');
+        index = get(hMatSize_Pop,'Value');
+        set(hMatSize,'String',num2str(matrixSize(index)));
     end
-    %% --- Executes on hMatSize_Editbox.
+
     function MatSize_Callback(source,eventdata,flag) %#ok<INUSL>
-        if strcmp(flag,'')==1
-            tempStr = get(hMatSize_Pop,'value');
-            PE=get(hPEDirectMenu,'Value');
-        switch get(hOrientationMenu,'Value')
-            case 1
-                if PE <= 2
-                    temp=tempStr;
-                elseif tempStr==1
-                    temp=2;
-                else
-                    temp=1;
-                end
-            case 2
-                if PE <= 2
-                    if tempStr==1
-                        temp=2;
-                    else
-                        temp=1;
-                    end
-                else
-                    temp=tempStr;
-                end
-            case 3
-                if PE <= 2
-                    if tempStr==1
-                        temp=2;
-                    else
-                        temp=1;
-                    end
-                else
-                    temp=tempStr;
-                end
-        end
-            MatSize=get(hMatSize,'value');
-            switch temp
-                case 1
-                    MatSizetemp=str2double(get(hMatSize,'String'));
-                    if MatSizetemp==0
-                        MatSizetemp=1;
-                    end
-                    MatSize(1)=MatSizetemp;
-                    if length(MatSize)<2
-                        MatSize(2)=MatSizetemp;
-                    end
-                    if ~isnan(MatSize(1))
-                        set(hMatSize,'value',MatSize);
-                        set(hMatSize,'string',sprintf('%1.0f',MatSize(1)));
-                    else
-                        set(hMatSize,'String','128');
-                    end;
-                case 2
-                    MatSizetemp=str2double(get(hMatSize,'String'));
-                    if MatSizetemp==0
-                        MatSizetemp=1;
-                    end
-                    MatSize(2)=MatSizetemp;
-                    if length(MatSize)<2
-                        MatSize(1)=MatSizetemp;
-                    end
-                    if ~isnan(MatSize(2))
-                        set(hMatSize,'value',MatSize);
-                        set(hMatSize,'string',sprintf('%1.0f',MatSize(2)));
-                    else
-                        set(hMatSize,'String','128');
-                    end;
+        index = get(hMatSize_Pop,'Value');
+        if isempty(flag)
+            matrixSize = get(hMatSize,'Value');
+            value = str2double(get(hMatSize,'String'));
+            if isreal(value) && isfinite(value) && value >= 0 && value == fix(value)
+                matrixSize(index) = max(1,value);
             end
-            updateSeq();
         else
-            flag=sscanf(flag,'%f');
-            set(hMatSize,'value',flag); 
-            set(hMatSize,'string',num2str(flag(1)));
-        end;
+            matrixSize = sscanf(flag,'%f').';
+            if isscalar(matrixSize)
+                matrixSize(2) = matrixSize(1);
+            end
+        end
+        set(hMatSize,'Value',matrixSize,'String',num2str(matrixSize(index)));
+        if isempty(flag)
+            updateSeq();
+        end
     end
 
     %% --- Executes on hADC_Freq_Editbox.
