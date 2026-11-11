@@ -3030,6 +3030,14 @@ reset();
         refreshGeometryDisplay();
     end
 
+    function overlaps = signalBoxOverlapsFOV()
+        global inputInfo displayInfo;
+        [center,width] = fovBox(inputInfo,fovDisplaySettings(displayInfo),get(hOrientationMenu,'Value'));
+        signalMin = [inputInfo.minX, inputInfo.minY, inputInfo.minZ] - 0.5;
+        signalMax = [inputInfo.maxX, inputInfo.maxY, inputInfo.maxZ] + 0.5;
+        overlaps = all(max(signalMin,center-width/2) < min(signalMax,center+width/2));
+    end
+
     %% --- Executes on hFOV_Pop_popmenu.
     function FOV_Pop_Callback(source,eventdata,flag)
         global geoData inputInfo displayInfo;
@@ -4312,6 +4320,21 @@ end
             if ~strcmp(sarChoice,'Run experimental SAR')
                 logSetup('Experimental SAR run cancelled by user.');
                 return
+            end
+        end
+
+        if tempMode == 1 && ~signalBoxOverlapsFOV()
+            choice = questdlg(['The green FOV and red signal simulation box do not overlap. ' ...
+                'Match the signal box to the FOV before running?'], ...
+                'FOV Outside Signal Box','Match','Cancel','Match');
+            if ~strcmp(choice,'Match')
+                return;
+            end
+            Match_Callback(source,eventdata,'');
+            if ~signalBoxOverlapsFOV()
+                warndlg('The available geometry cannot provide a signal box that overlaps the FOV.', ...
+                    'FOV Outside Geometry','modal');
+                return;
             end
         end
 

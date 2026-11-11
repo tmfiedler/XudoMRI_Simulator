@@ -113,6 +113,8 @@ limits the voxels that contribute signal and can be positioned independently.
 **Match** fits the red box around the green FOV with two extra voxels per side
 where the model bounds permit it. For nonselective Cartesian scans the fit
 spans the model along the slice axis. RAD_3D uses its isotropic FOV on all axes.
+If the boxes are disjoint, **Run** in Signal mode offers to match the red box
+before proceeding. You can cancel the run and adjust the boxes manually.
 Regenerate the sequence after changing the Cartesian prescription.
 
 ## Imaging controls
