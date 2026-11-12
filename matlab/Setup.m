@@ -124,7 +124,7 @@ uicontrol(hGeoPanel,'Style','text','String',['v' simulatorVersion],...
     'Units','normalized','Position',[.60 .004 .38 .024],...
     'HorizontalAlignment','right','FontUnits','pixels','FontSize',10,...
     'ForegroundColor',[.4 .4 .4],'BackgroundColor','white',...
-    'Tag','SimulatorVersion','TooltipString','Repository version');
+    'Tag','SimulatorVersion');
 clear simulatorVersion;
 
 global inputCmd;
@@ -565,7 +565,7 @@ uipanel(hMain,'Title','Imaging Setup',...
 
 temp001 = .02*temp01; temp002 = .255*temp02;
 % % % Display the B0Text.
-uicontrol(hMain,'Style','text','string','B0(T)',...
+hB0Label = uicontrol(hMain,'Style','text','string','B0(T)',...
     'Position',[temp001 temp002 32 13],...
     'BackgroundColor',[1,1,1]);
 
@@ -577,7 +577,7 @@ hB0Edit = uicontrol(hMain,'Style','edit','string','3',...
 
 temp001 = temp001+(25+6); temp002 = .255*temp02;
 % % % Display the Nucleus text.
-uicontrol(hMain,'Style','text','string','Nuc.',...
+hNucleusLabel = uicontrol(hMain,'Style','text','string','Nuc.',...
     'Position',[temp001 temp002 26 13],...
     'BackgroundColor',[1,1,1]);
 
@@ -588,7 +588,6 @@ hNucleus = uicontrol(hMain,'Style','popupmenu',...
     'String',{nucleusDefinitions.name},'Value',1,...
     'Position',[temp001 temp002 60 13+7],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel',...
-    'TooltipString','Nucleus for signal simulation',...
     'Callback',{@Nucleus_Callback,''});
 
 temp001 = temp001+(60+4); temp002 = .255*temp02;
@@ -678,7 +677,10 @@ hRF_Num = uicontrol(hMain,'Style','edit',...
 
 % % % Display the target B1+ text.
 temp001 = temp001+30+36; temp002 = temp002+3;
-uicontrol(hMain,'Style','text','string','B1+ (uT)',...
+b1Tip = ['Editing RF FA sets target B1+ for the current pulse shape and duration. ', ...
+    'With a calibrated target, changing pulse duration updates the displayed FA. ', ...
+    'Leave blank to use the shim B1+ from Tx Array.'];
+uicontrol(hMain,'Style','text','string','B1+ (uT)','TooltipString',b1Tip,...
     'Position',[temp001 temp002 52 13],...
     'BackgroundColor',[1,1,1]);
 
@@ -688,7 +690,7 @@ hTargetB1 = uicontrol(hMain,'Style','edit',...
     'String','',...
     'Position',[temp001 temp002 32 13+7],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel','Enable','off',...
-    'TooltipString','Desired B1+ in uT. Leave blank to use the shim B1+ from Tx Array.',...
+    'TooltipString',b1Tip,...
     'Callback',{@TargetB1_Callback,''});
 
 % % % Display the TI text.
@@ -721,7 +723,7 @@ hMatSize = uicontrol(hMain,'Style','edit','value',[128,128],...
 
 % % % Display the ADC_Freq text.
 temp001 = temp001+26+40; temp002 = temp002+3;
-uicontrol(hMain,'Style','text','string','Rcvr BW (kHz)',...
+hADCLabel = uicontrol(hMain,'Style','text','string','Rcvr BW (kHz)',...
     'Position',[temp001 temp002 92 13],...
     'BackgroundColor',[1,1,1]);
 
@@ -758,7 +760,7 @@ hFE=uicontrol(hMain,'Style','checkbox','string','FE','Value',1,...
 
 % % % Display the TE text.
 temp001=temp001+38+30;
-uicontrol(hMain,'Style','text','string','TE (ms)',...
+hTELabel = uicontrol(hMain,'Style','text','string','TE (ms)',...
     'Position',[temp001 temp002 42 13],...
     'BackgroundColor',[1,1,1]);
 
@@ -772,7 +774,7 @@ hTE = uicontrol(hMain,'Style','edit',...
 
 temp001=temp001+40+26; temp002 = temp002+3;
 % % % Display the TR text.
-uicontrol(hMain,'Style','text','string','TR (ms)',...
+hTRLabel = uicontrol(hMain,'Style','text','string','TR (ms)',...
     'Position',[temp001 temp002 42 13],...
     'BackgroundColor',[1,1,1]);
 
@@ -882,7 +884,6 @@ temp001 = temp001+85+4; temp002 = temp002+3;
 hSignalGPU = uicontrol(hMain,'Style','checkbox','string','GPU','Value',0,...
     'Position',[temp001 temp002+0.5 45 13],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel',...
-    'TooltipString','Use the GPU signal simulation engine',...
     'Callback',{@SignalGPU_Callback,''});
 
 % %  Display the Fields button.
@@ -898,7 +899,6 @@ hRun = uicontrol(hMain,'Style','pushbutton','String','Run',...
     'Callback',{@Run_Callback});
 hJobs = uicontrol(hMain,'Style','pushbutton','String','Jobs',...
     'Position',[temp001+45+10+130 .012*temp02 60 25],'FontSize',10,...
-    'TooltipString','Open the signal simulation queue',...
     'Callback',@ShowSignalJobs_Callback); %#ok<NASGU>
 
 
@@ -1284,6 +1284,7 @@ reset();
             updateBusyState('Restoring sequence preview...');
             restoreLoadedSequencePreview();
             updateTargetFlipAngleDisplay();
+            updateReadoutTooltips();
             slice = readSequenceSlice(inputInfo);
             if radialAxesRestored || (~protocol.hasUnifiedFOV && slice.offset ~= 0)
                 markSequenceDirty();
@@ -1920,6 +1921,8 @@ reset();
             set(hSeqGen,'Enable','off');
 
             set(hSeqPlot,'Enable','off');
+            updateLarmorTooltips();
+            updateReadoutTooltips();
             displayInfo.HideFOVOverlay = true;
 
             displayImages(hImages,inputInfo,displayInfo,get(hOrientationMenu,'Value'),geoData);
@@ -2316,7 +2319,8 @@ reset();
 
     function GeoSliceTHEdit_Callback(source,eventdata,flag) %#ok<INUSL>
         global inputInfo;
-        if isempty(flag)
+        isInteractive = isempty(flag);
+        if isInteractive
             flag = get(hGeoSliceTH,'String');
         end
         thickness = str2double(flag);
@@ -2326,6 +2330,9 @@ reset();
         inputInfo.sliceTH = thickness;
         set(hGeoSliceTH,'String',num2str(thickness,'%.9g'));
         refreshGeometryDisplay();
+        if isInteractive
+            updateReadoutTooltips();
+        end
         markSequenceDirty();
     end
 
@@ -2873,12 +2880,15 @@ reset();
             end;
         else
             set(hB0Edit,'String',flag); 
-        end;  
+        end;
+        updateLarmorTooltips();
     end
     
     %% --- Executes on hNucleus_Menu.
     function Nucleus_Callback(source,eventdata,flag) %#ok<INUSD,INUSD>
         if strcmp(flag,'')==1
+            updateLarmorTooltips();
+            updateReadoutTooltips();
             updateTargetFlipAngleDisplay();
             markSequenceDirty();
             return;
@@ -2890,6 +2900,7 @@ reset();
             error('Setup:UnsupportedNucleus','Nucleus %s is absent from config/nuclei.yaml.',strtrim(flag));
         end
         set(hNucleus,'Value',temp(1));
+        updateLarmorTooltips();
         updateTargetFlipAngleDisplay();
     end
 
@@ -4104,13 +4115,10 @@ end
     function updateNoiseLoadingButton()
         if strcmp(noiseLoading.Mode,'Full')
             label = 'Noise: Full sample';
-            tip = 'Full represented geometry; independent of the signal sample box.';
         else
             label = 'Noise: Cropped';
-            tip = sprintf('Explicit approximation: [%g %g %g] to [%g %g %g]. %s', ...
-                noiseLoading.Bounds,noiseLoading.Note);
         end
-        set(hNoiseLoading,'String',label,'TooltipString',tip);
+        set(hNoiseLoading,'String',label);
     end
 
     %% --- Executes on hNEX_Editbox.
@@ -4141,8 +4149,7 @@ end
         
         switch tempMode
             case 1
-                set(hRun,'String','Run','FontSize',12,'BackgroundColor',[0,1,0], ...
-                    'TooltipString','Run the selected signal simulation');
+                set(hRun,'String','Run','FontSize',12,'BackgroundColor',[0,1,0]);
                 set(hB0Edit,'Enable','on');
                 set(hNucleus,'Enable','on');
                 set(hExpDB0,'Enable','on');
@@ -4164,9 +4171,7 @@ end
 
             case 2
                 set(hRun,'String','Experimental SAR','FontSize',10, ...
-                    'BackgroundColor',[1,0.85,0.45], ...
-                    'TooltipString',['Run the local historical NutateSAR build. ', ...
-                    'SAR is unvalidated and for review only.']);
+                    'BackgroundColor',[1,0.85,0.45]);
                 set(hB0Edit,'Enable','off');
                 set(hNucleus,'Enable','off');
                 set(hExpDB0,'Enable','off');
@@ -4187,8 +4192,7 @@ end
                 set(hNEX,'Enable','off');
 
             case 3
-                set(hRun,'String','Run','FontSize',12,'BackgroundColor',[0,1,0], ...
-                    'TooltipString','Run the selected noise simulation');
+                set(hRun,'String','Run','FontSize',12,'BackgroundColor',[0,1,0]);
                 set(hB0Edit,'Enable','off');
                 set(hNucleus,'Enable','off');
                 set(hExpDB0,'Enable','off');
@@ -4514,10 +4518,58 @@ end
             end;
         end
 
+        updateReadoutTooltips();
         updateTargetFlipAngleDisplay();
         markSequenceDirty();
-        
+
         cd(tempAddr);
+    end
+
+    function updateLarmorTooltips()
+        b0 = str2double(get(hB0Edit,'String'));
+        nucleus = getCurrentNucleus();
+        tip = 'Enter a finite B0 to calculate the Larmor frequency.';
+        if isreal(b0) && isfinite(b0) && b0 >= 0
+            [~,gammaHzPerT] = getNucleusGamma(nucleus);
+            tip = sprintf('Larmor frequency for %s at %g T: %.9g MHz.', ...
+                nucleus,b0,(gammaHzPerT/1e6)*b0);
+        end
+        set([hB0Label,hB0Edit,hNucleusLabel,hNucleus],'TooltipString',tip);
+    end
+
+    function updateReadoutTooltips()
+        global inputInfo;
+        bwTip = '';
+        teTip = '';
+        trTip = '';
+        if strcmp(get(hSeqType,'Enable'),'on')
+            settings = readSequenceControls();
+            bandwidth = settings.ADC.BW; % kHz
+            samples = settings.MatSize(1);
+            if isreal(bandwidth) && isfinite(bandwidth) && bandwidth > 0
+                sequenceName = getCurrentSequenceName();
+                readout = 'line';
+                if is3DRadSequenceName(sequenceName)
+                    readout = 'spoke';
+                end
+                bwTip = sprintf('Readout per %s: %.6g ms (%g samples). Dwell: %.6g us.', ...
+                    readout,samples/bandwidth,samples,1000/bandwidth);
+
+                % Use the displayed TE for the TR limit. Omit the TI control
+                % so this timing query leaves protocol settings untouched.
+                slice = readSequenceSlice(inputInfo);
+                [minTE,minTR] = dispatchSequence(sequenceName,get(hSeqType,'Value'),settings,slice,[]);
+                if isreal(minTE) && isfinite(minTE)
+                    teTip = sprintf('Minimum TE for the current settings: %.6g ms.',minTE);
+                end
+                if isreal(minTR) && isfinite(minTR)
+                    trTip = sprintf('Minimum TR at the current TE: %.6g ms.',minTR);
+                end
+            end
+        end
+        set([hADCLabel,hADC_Freq],'TooltipString',bwTip);
+        set([hTELabel,hTE],'TooltipString',teTip);
+        set([hTRLabel,hTR],'TooltipString',trTip);
     end
 
     function settings = readSequenceControls()
@@ -5021,6 +5073,8 @@ end
 
         % %  Display the Run button.
         set(hRun,'Enable','off');
+        updateLarmorTooltips();
+        updateReadoutTooltips();
     end
 
     function beginBusyState(message)

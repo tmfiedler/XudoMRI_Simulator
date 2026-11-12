@@ -139,6 +139,12 @@ Regenerate the sequence after changing the Cartesian prescription.
 | `#Dummy TRs` | Excitations before recorded acquisition |
 | `PE Direction` | Cartesian phase-encode axis and polarity |
 
+Hover over B0 or Nuc. for the nominal Larmor frequency. Rcvr BW shows the dwell
+time and the readout duration per Cartesian line or radial spoke. For GRE_EPI,
+the duration is for one line in the echo train. TE and TR show the sequence's
+minimum times for the current settings, with minimum TR evaluated at the
+displayed TE.
+
 The RF point count sets how finely each pulse is sampled. Start with the
 512-point default; higher counts increase computation. Check that results are
 stable when increasing the count for your chosen pulse/tissue settings.

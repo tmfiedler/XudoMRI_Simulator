@@ -18,6 +18,15 @@ when their stored contract changes.
 - The radial trajectory viewer marks the individual samples in its 3D and
   radius plots. The reconstruction viewer pairs the Rx and display controls
   with their labels and gives the lower controls more vertical space.
+- Setup tooltips show the selected nucleus's Larmor frequency, readout duration
+  and dwell time, and sequence timing limits. The B1+ tooltip explains its link
+  to flip angle and RF pulse duration. Removed the GPU, Run, and Jobs tooltips.
+
+### Fixes
+
+- Removed tooltips from the version badge, noise loading button, radial
+  acquisition resolution field, job details line, and reconstruction Log checkbox.
+
 
 ## 2026.0
 
