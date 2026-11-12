@@ -32,7 +32,7 @@ function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
     if nargin < 10 || isempty(nucleus)
         nucleus = getDefaultNucleus();
     end
-    gamma = getNucleusGamma(nucleus);
+    [gamma,gammaHz] = getNucleusGamma(nucleus);
 
     ADC.numSamples = MatSize1;
     ADC.duration = MatSize1/ADC.BW; % ms
@@ -45,19 +45,18 @@ function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
     % FE/PE/SS are the logical x/y/z radial axes and must all be enabled.
     % The GUI shows one isotropic FOV and stores it in the legacy two-entry
     % vector. max(...) preserves compatibility with older protocol files.
-    radialFOV = max([FOV1, FOV2, 1]);
-    spokeAmp = readoutAmp(gamma,ADC.BW,radialFOV);
+    if isfield(ADC,'radialResolutionMm') && ~isempty(ADC.radialResolutionMm)
+        validateattributes(ADC.radialResolutionMm,{'numeric'},{'scalar','real','finite','positive'});
+        kEdge = 500 / ADC.radialResolutionMm; % cycles/m
+        spokeAmp = 1000 * kEdge / (gammaHz * (ADC.duration / 1000)); % mT/m
+        validateattributes(spokeAmp,{'numeric'},{'scalar','real','finite','positive'});
+    else
+        radialFOV = max([FOV1, FOV2, 1]);
+        kEdge = MatSize1 * 1000 / (2 * radialFOV);
+        spokeAmp = readoutAmp(gamma,ADC.BW,radialFOV);
+    end
 
-    Gread.amp = [0,0,0];
-    if GradOn.fe == 1
-        Gread.amp(1) = spokeAmp;
-    end
-    if GradOn.pe == 1
-        Gread.amp(2) = spokeAmp;
-    end
-    if GradOn.ss == 1
-        Gread.amp(3) = spokeAmp;
-    end
+    Gread.amp = spokeAmp;
 
     % Return each spoke to k = 0 before the next TR. The Bloch simulator
     % exports one trajectory sample per ADC point, so leaving residual
@@ -126,12 +125,12 @@ function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
         varargout{1}.Plot.excitationCount = MatSize2;
         varargout{1}.Plot.sliceAxisLabel = 'Z';
         varargout{1}.Plot.kspacePreview.samplesPerSpoke = MatSize1;
+        varargout{1}.Plot.kspacePreview.kEdge = kEdge;
         varargout{1}.Plot.kspacePreview.spokeDirections = spokeDirs;
         varargout{1}.Plot.kspacePreview.previewSpokes = min(64,MatSize2);
 
         if dummy > 0
-            dummyDir = representativeDirection(spokeDirs,GradOn);
-            dummyBlock = buildSpokeBlock(dummyDir,0,tempRF_Y,...
+            dummyBlock = buildSpokeBlock(spokeDirs(1,:),0,tempRF_Y,...
                 startTime,RF,ADC,Gread,readDelay,tailDelay);
 
             varargout{1}.Dummy.tStep = dummyBlock.tStep;
@@ -207,39 +206,10 @@ function dirs = spokeDirections(numSpokes)
     dirs = [r .* cos(phi), r .* sin(phi), z];
 end
 
-function dirVec = representativeDirection(dirs,GradOn)
-    if ~isempty(dirs)
-        dirVec = dirs(1,:);
-        return;
-    end
-
-    dirVec = [GradOn.fe, GradOn.pe, GradOn.ss] ~= 0;
-    if any(dirVec)
-        dirVec = dirVec ./ norm(dirVec);
-    else
-        dirVec = [0,0,0];
-    end
-end
-
-function block = emptyBlock()
-    block.tStep = [];
-    block.RF = [];
-    block.DFreq = [];
-    block.ADC = [];
-    block.Gfe = [];
-    block.Gpe = [];
-    block.Gss = [];
-end
-
 function block = buildSpokeSeries(spokeDirs,acquire,tempRF_Y,...
     startTime,RF,ADC,Gread,readDelay,tailDelay)
 
     numSpokes = size(spokeDirs,1);
-    if numSpokes == 0
-        block = emptyBlock();
-        return;
-    end
-
     tStepCells = cell(1,numSpokes);
     rfCells = cell(1,numSpokes);
     dFreqCells = cell(1,numSpokes);

@@ -15,6 +15,13 @@ when their stored contract changes.
 
 ## Unreleased
 
+
+### Features
+
+- `RAD_3D` supports a nominal acquisition resolution independent of samples per
+  spoke. The reconstruction viewer uses the saved resolution for its default
+  matrix and supports an override for radial data. Deapodization operates on
+  the output volume after extracting it from the internal FFT grid.
 - The radial trajectory viewer marks the individual samples in its 3D and
   radius plots. The reconstruction viewer pairs the Rx and display controls
   with their labels and gives the lower controls more vertical space.

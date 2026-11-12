@@ -6,6 +6,7 @@ function reconContext = buildRadialReconstructionContext(traj,reconSize,fovMeter
     if nargin < 4
         logFcn = @(varargin) [];
     end
+    validateattributes(reconSize,{'numeric'},{'scalar','real','finite','integer','positive'});
     oversampling = 2;
     kernelWidth = 4;
     beta = beattyKaiserBeta(kernelWidth,oversampling);
@@ -13,7 +14,7 @@ function reconContext = buildRadialReconstructionContext(traj,reconSize,fovMeter
     logFcn('Building reconstruction context traj=%s reconSize=%d gridSize=%d',...
         reconstructionSizeString(traj),reconSize,gridSize);
 
-    [coords,dcf,info] = prepareRadialTrajectory(traj,gridSize,reconSize,fovMeters,logFcn);
+    [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reconSize,fovMeters,logFcn);
     logFcn('Prepared coords=%s dcf=%s',reconstructionSizeString(coords),reconstructionSizeString(dcf));
     info.reconSize = reconSize;
     info.gridSize = gridSize;
@@ -23,6 +24,7 @@ function reconContext = buildRadialReconstructionContext(traj,reconSize,fovMeter
 
     reconContext.coords = coords;
     reconContext.dcf = dcf;
+    reconContext.retained = retained;
     reconContext.info = info;
     reconContext.kernelWidth = kernelWidth;
     reconContext.gridSize = gridSize;

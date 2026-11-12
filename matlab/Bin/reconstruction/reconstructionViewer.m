@@ -3,7 +3,7 @@ function varargout = reconstructionViewer(varargin)
 %   This is the current backend opened by RECO. It resolves protocol and
 %   trajectory sidecars, validates sample dimensions, reconstructs each Rx
 %   channel, and combines channels for display. The 3D radial path is a
-%   quick-look Kaiser-Bessel gridding method; see docs/ref/RECO_RADIAL3D_METHOD.md.
+%   quick-look Kaiser-Bessel gridding method. See docs/SCIENTIFIC_METHODS.md.
 
     initialSelection = parseInitialSelection(varargin{:});
     hFig = createReconstructionFigure();
@@ -149,8 +149,15 @@ function hFig = createReconstructionFigure()
     bottomActionY = 0.014;
     handles.trajectoryButton = uicontrol(hControl,'Style','pushbutton',...
         'String','View Trajectory','Units','normalized',...
-        'Position',[0.08 trajectoryY 0.84 actionHeight],'Enable','off',...
+        'Position',[0.08 trajectoryY 0.42 actionHeight],'Enable','off',...
         'Callback',@viewTrajectoryCallback);
+
+    uicontrol(hControl,'Style','text','String','Matrix','Units','normalized',...
+        'Position',[0.52 trajectoryY+labelInset 0.18 labelHeight],'BackgroundColor',[1 1 1]);
+    handles.reconMatrixEdit = uicontrol(hControl,'Style','edit',...
+        'Units','normalized','Position',[0.72 trajectoryY 0.20 actionHeight],'BackgroundColor',[1 1 1],...
+        'Enable','off','Tag','RadialReconstructionMatrix','Callback',@reconMatrixCallback,...
+        'TooltipString','Voxels per axis for 3D radial data. Clear to restore the protocol default.');
 
     handles.snrMapButton = uicontrol(hControl,'Style','pushbutton',...
         'String','SNR Map','Units','normalized',...
@@ -214,6 +221,7 @@ function hFig = createReconstructionFigure()
     state.samplesPerSpoke = [];
     state.numSpokes = [];
     state.reconSize = [];
+    state.defaultReconSize = [];
     state.reconContext = [];
     state.reconMode = '';
     state.cartesianMatSize = [];
@@ -342,7 +350,12 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
             return;
         end
 
-        [samplesPerSpoke,numSpokes,reconSize] = inferRadialDimensions(protocol,totalSamples);
+        [samplesPerSpoke,numSpokes] = inferRadialDimensions(protocol,totalSamples);
+        reconSize = samplesPerSpoke;
+        if ~isempty(protocol.RadialResolutionMm)
+            fovMeters = radialFOVMeters(protocol.FOV);
+            reconSize = ceil(max(fovMeters) * 1000 / protocol.RadialResolutionMm);
+        end
         logRadialReco('Inferred samplesPerSpoke=%d numSpokes=%d reconSize=%d',...
             samplesPerSpoke,numSpokes,reconSize);
         traj = reshapeTrajectoryData(trajFlat,samplesPerSpoke,numSpokes);
@@ -369,6 +382,7 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
         state.samplesPerSpoke = samplesPerSpoke;
         state.numSpokes = numSpokes;
         state.reconSize = reconSize;
+        state.defaultReconSize = reconSize;
         state.trajectory = traj;
         state.reconContext = [];
         state.cartesianMatSize = [];
@@ -400,6 +414,7 @@ function loadCartesianReconstruction(hFig,state,protocol,signalData,dataPath,sel
     state.samplesPerSpoke = [];
     state.numSpokes = [];
     state.reconSize = [];
+    state.defaultReconSize = [];
     state.trajectory = [];
     state.reconContext = [];
     state.cartesianMatSize = matSize;
@@ -416,7 +431,7 @@ function loadCartesianReconstruction(hFig,state,protocol,signalData,dataPath,sel
     guidata(hFig,state);
     updateSliceControls(hFig);
     updateInfoText(hFig);
-    updateNoiseControls(hFig);
+    updateDataControls(hFig);
     set(state.handles.exportViewPopup,'Enable','on');
     set(state.handles.exportViewButton,'Enable','on');
     set(state.handles.snrMapButton,'Enable','off');
@@ -513,7 +528,7 @@ function loadNoiseCallback(source,~)
         state.noiseFiles = selectedFiles;
         guidata(hFig,state);
 
-        updateNoiseControls(hFig);
+        updateDataControls(hFig);
         updateBusyState(hFig,'Reconstructing with noise...');
         applyCurrentReconstruction(hFig,'Status: reconstructing with noise...');
         setStatus(hFig,'Status: reconstruction complete (noise applied)');
@@ -664,6 +679,39 @@ function viewTrajectoryCallback(source,~)
     setStatus(hFig,'Status: opened trajectory viewer');
 end
 
+function reconMatrixCallback(source,~)
+    hFig = ancestor(source,'figure');
+    previous = guidata(hFig);
+    if ~previous.dataLoaded || ~strcmp(previous.reconMode,'radial') || previous.busyDepth > 0
+        return;
+    end
+    try
+        value = strtrim(get(source,'String'));
+        reconSize = previous.defaultReconSize;
+        if ~isempty(value)
+            reconSize = str2double(value);
+            validateattributes(reconSize,{'numeric'},{'scalar','real','finite','integer','positive'});
+        end
+        if reconSize == previous.reconSize
+            set(source,'String',num2str(reconSize));
+            return;
+        end
+        state = previous;
+        state.reconSize = reconSize;
+        state.reconContext = [];
+        state.cleanRecon = [];
+        state.resetSliceIndex = true;
+        guidata(hFig,state);
+        applyCurrentReconstruction(hFig,'Status: updating radial reconstruction matrix...');
+        setStatus(hFig,'Status: reconstruction complete');
+    catch ME
+        guidata(hFig,previous);
+        set(source,'String',num2str(previous.reconSize));
+        setStatus(hFig,'Status: reconstruction matrix unchanged');
+        errordlg(ME.message,'Radial Reconstruction Matrix');
+    end
+end
+
 %% Reconstruction orchestration
 
 function applyCurrentReconstruction(hFig,statusMessage)
@@ -708,7 +756,7 @@ function applyCurrentReconstruction(hFig,statusMessage)
         guidata(hFig,state);
         updateSliceControls(hFig);
         updateInfoText(hFig);
-        updateNoiseControls(hFig);
+        updateDataControls(hFig);
         set(state.handles.exportViewPopup,'Enable','on');
         set(state.handles.exportViewButton,'Enable','on');
         set(state.handles.snrMapButton,'Enable','off');
@@ -763,7 +811,7 @@ function applyCurrentReconstruction(hFig,statusMessage)
     guidata(hFig,state);
     updateSliceControls(hFig);
     updateInfoText(hFig);
-    updateNoiseControls(hFig);
+    updateDataControls(hFig);
     set(state.handles.exportViewPopup,'Enable','on');
     set(state.handles.exportViewButton,'Enable','on');
     set(state.handles.snrMapButton,'Enable','on');
@@ -994,13 +1042,15 @@ end
 
 %% Display and status management
 
-function updateNoiseControls(hFig)
+function updateDataControls(hFig)
     state = guidata(hFig);
     handles = state.handles;
+    hasNoise = state.dataLoaded && state.noiseLoaded;
+    radial = state.dataLoaded && strcmpi(state.reconMode,'radial');
     set(handles.loadNoiseButton,'Enable',onOff(state.dataLoaded));
-    set(handles.noiseScaleEdit,'String',num2str(state.noiseScale),...
-        'Enable',onOff(state.dataLoaded && state.noiseLoaded));
-    set(handles.snrMapButton,'Enable',onOff(state.dataLoaded && state.noiseLoaded && strcmpi(state.reconMode,'radial')));
+    set(handles.noiseScaleEdit,'String',num2str(state.noiseScale),'Enable',onOff(hasNoise));
+    set(handles.snrMapButton,'Enable',onOff(hasNoise && radial));
+    set(handles.reconMatrixEdit,'String',num2str(state.reconSize),'Enable',onOff(radial));
 end
 
 function sliceIndex = clampSliceIndex(sliceIndex,dims)
@@ -1216,11 +1266,8 @@ function updateInfoText(hFig)
     end
 
     [~,trajName,trajExt] = fileparts(protocol.TrajectoryFile);
-    recommendedSpokes = estimateRecommendedSpokes(info.reconSize);
-    spokeRatio = 0;
-    if recommendedSpokes > 0
-        spokeRatio = info.numSpokes / recommendedSpokes;
-    end
+    recommendedSpokes = estimateRecommendedSpokes(info,info.retainedMaxRadius);
+    spokeRatio = info.numSpokes / recommendedSpokes;
 
     infoLines = {
         ['Sequence: ',protocol.SequenceType],...
@@ -1228,7 +1275,8 @@ function updateInfoText(hFig)
         ['Readout x Spokes: ',num2str([info.samplesPerSpoke, info.numSpokes])],...
         sprintf('Spoke density: %d / %d (%.2f%% of rough Nyquist)',...
             info.numSpokes,recommendedSpokes,100*spokeRatio),...
-        sprintf('Recon Matrix: %d^3 | Noise Scale: %g',info.reconSize,state.noiseScale),...
+        sprintf('Recon: %d^3 | %.4g mm voxels | Noise Scale: %g',...
+            info.reconSize,1000*info.voxelSizeMeters(1),state.noiseScale),...
         ['Files: ',protName,protExt,' | ',trajName,trajExt],...
         noiseSummary...
         };
@@ -1247,9 +1295,9 @@ function noiseSummary = formatNoiseSummary(state)
     end
 end
 
-function recommendedSpokes = estimateRecommendedSpokes(reconSize)
-    reconSize = max(1,round(reconSize));
-    recommendedSpokes = round(pi * reconSize^2);
+function recommendedSpokes = estimateRecommendedSpokes(info,radius)
+    kSpaceDiameter = 2 * radius * max(info.fovMeters);
+    recommendedSpokes = max(1,round(pi * kSpaceDiameter^2));
 end
 
 function plotTrajectoryFigure(traj,info)
@@ -1292,12 +1340,12 @@ function plotTrajectoryFigure(traj,info)
 
     hInfo = subplot(2,2,4,'Parent',hFig);
     axis(hInfo,'off');
-    recommendedSpokes = estimateRecommendedSpokes(info.reconSize);
+    recommendedSpokes = estimateRecommendedSpokes(info,info.maxRadius);
     infoLines = {
         sprintf('Samples per spoke: %d',info.samplesPerSpoke),...
         sprintf('Loaded spokes: %d',info.numSpokes),...
         sprintf('Rough Nyquist spokes: %d',recommendedSpokes),...
-        sprintf('Sampling fraction: %.2f%%',100 * info.numSpokes / max(recommendedSpokes,1)),...
+        sprintf('Sampling fraction: %.2f%%',100 * info.numSpokes / recommendedSpokes),...
         'Exported k-space origin: [0 0 0] cycles/m',...
         sprintf('Max |k|: %0.4g',info.maxRadius)...
         };
@@ -1518,6 +1566,7 @@ function protocol = parseRadialProtocolFile(protFileName)
     protocol.SequenceType = 'Unknown';
     protocol.FOV = [0 0];
     protocol.MatSize = [0 0];
+    protocol.RadialResolutionMm = [];
     protocol.NumRx = 1;
     protocol.ProtocolFile = protFileName;
     protocol.TrajectoryFile = '';
@@ -1530,6 +1579,7 @@ function protocol = parseRadialProtocolFile(protFileName)
     if fid == -1
         error(['Unable to open protocol file: ',protFileName]);
     end
+    cleanup = onCleanup(@() fclose(fid)); %#ok<NASGU>
 
     protLine = fgetl(fid);
     while ischar(protLine)
@@ -1543,6 +1593,9 @@ function protocol = parseRadialProtocolFile(protFileName)
 
             case 'MatSize:'
                 protocol.MatSize = sscanf(fgetl(fid),'%f').';
+
+            case 'Radial Acquisition Resolution(mm):'
+                protocol.RadialResolutionMm = parseRadialResolutionMm(fgetl(fid));
 
             case '# Rx:'
                 protocol.NumRx = str2double(strtrim(fgetl(fid)));
@@ -1564,8 +1617,6 @@ function protocol = parseRadialProtocolFile(protFileName)
         end
         protLine = fgetl(fid);
     end
-
-    fclose(fid);
 
     if isempty(protocol.SequenceType)
         protocol.SequenceType = 'Unknown';
@@ -1589,7 +1640,7 @@ end
 
 %% Radial reconstruction
 
-function [samplesPerSpoke,numSpokes,reconSize] = inferRadialDimensions(protocol,totalSamples)
+function [samplesPerSpoke,numSpokes] = inferRadialDimensions(protocol,totalSamples)
     matSize = protocol.MatSize;
     if isempty(matSize)
         error('Protocol file does not define MatSize.');
@@ -1607,7 +1658,6 @@ function [samplesPerSpoke,numSpokes,reconSize] = inferRadialDimensions(protocol,
     end
 
     numSpokes = round(totalSamples / samplesPerSpoke);
-    reconSize = samplesPerSpoke;
 end
 
 function spokeData = reshapeSignalData(signalData,samplesPerSpoke,numSpokes)

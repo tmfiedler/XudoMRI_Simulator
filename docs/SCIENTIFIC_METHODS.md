@@ -202,14 +202,19 @@ A k reset alone does not reset magnetization.
 GRE/SE use Cartesian phase-encode lines. GRE_EPI alternates readout polarity.
 RAD_3D uses nonselective excitation and one center-out half-spoke per TR;
 Fibonacci-sphere directions cover the complete sphere, and rewinders return
-the nominal gradient moment to zero. For sample index `j = 0…Ns−1`:
+the nominal gradient moment to zero. By default, for sample index `j = 0…Ns−1`:
 
 $$
 \Delta k=\frac{1}{2F},\qquad
 \mathbf k_j=(j+\tfrac12)\Delta k\,\mathbf u_{\mathrm{spoke}}.
 $$
 
-`F` is the isotropic FOV in metres. Radial TE is RF center to **ADC onset**;
+`F` is the isotropic FOV in metres. With an explicit nominal acquisition
+resolution `d` in metres, use `k_edge = 1/(2d)` and `Δk = k_edge/Ns`. The constant
+gradient magnitude in T/m is `k_edge/(γ_Hz T_read)`, with gyromagnetic ratio
+`γ_Hz` in Hz/T and `T_read` in seconds. `T_read` is the sample count divided by
+ADC bandwidth in Hz. The rewinder cancels the full readout gradient area.
+Radial TE is RF center to **ADC onset**;
 the first stored sample is half a radial step from zero. Spoke count controls
 angular coverage. The sequence assumes ideal gradient waveforms; hardware
 slew/amplitude limits and scanner realizability are not established. Coherent
@@ -327,8 +332,14 @@ Implementation: [reconstructCartesianDataset.m](../matlab/Bin/reconstruction/rec
 
 ### 3D radial images
 
-The matching exported trajectory supplies `k`; no empirical center is subtracted.
-For isotropic FOV `F`, target size `N = samples per spoke` and grid size `Ng=2N`:
+The matching exported trajectory supplies `k` in cycles/m at the physical
+origin. For isotropic FOV `F`, the target size `N` defaults to `ceil(F/d)` when
+the protocol specifies nominal acquisition resolution `d`. Rounding up keeps
+the prescribed acquisition bandwidth in the default reconstruction. Otherwise
+`N` defaults to samples per spoke. The viewer can override either default.
+Retain samples within the spherical Nyquist band `|k| ≤ N/(2F)` before gridding
+and normalize over the retained weights. A larger output matrix at fixed FOV
+gives smaller voxels at the same acquired bandwidth. For grid size `Ng=2N`:
 
 $$
 \mathbf q=\mathbf k F\frac{N_g}{N},\qquad
@@ -371,8 +382,9 @@ $$
 The code evaluates the square root in complex arithmetic. Grid coordinates are
 `u_l = (l − floor(Ng/2))/Ng`, for `l=0…Ng−1`; their sampled transform maximum
 is `T(0)` for the configured kernel. The removable zero in `T` is filled by its
-limit. The crop places physical zero
-at index `floor(N/2)+1` for even and odd matrices. The resulting operator
+limit. The implementation gathers the centered output directly from the FFT
+and applies deapodization and normalization only to those voxels. Physical zero
+is at index `floor(N/2)+1` for even and odd matrices. The resulting operator
 approximates the normalized weighted adjoint:
 
 $$

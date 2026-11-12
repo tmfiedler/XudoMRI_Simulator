@@ -380,6 +380,12 @@ the protocol; relative paths are first resolved against MATLAB's current
 folder. Output paths are rebased to the loaded protocol folder. Keep each run's
 protocol with its outputs so later settings changes do not obscure their meaning.
 
+For `RAD_3D`, the optional label `Radial Acquisition Resolution(mm):` precedes
+a positive scalar in mm. Setup omits the label when the field is blank. An
+absent label selects the original readout gradient and a default reconstruction
+matrix with side length equal to samples per spoke. The `.seqn` and
+`.ktrj` layouts are unchanged.
+
 Readers/writer: [readSetupProtocol.m](../matlab/Bin/inputs/readSetupProtocol.m),
 [writeSetupProtocol.m](../matlab/Bin/inputs/writeSetupProtocol.m) and the
 [reconstruction parser](../matlab/Bin/reconstruction/reconstructionViewer.m).

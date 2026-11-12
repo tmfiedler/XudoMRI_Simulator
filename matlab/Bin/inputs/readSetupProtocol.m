@@ -69,6 +69,7 @@ for k = 1:size(fields,1)
     protocol.(fields{k,1}) = @() valueAfter(label);
 end
 protocol.hasUnifiedFOV = any(strcmp(lines,'Unified FOV Prescription:'));
+protocol.radialResolutionText = @() optionalValueAfter('Radial Acquisition Resolution(mm):');
 protocol.txWeight = @readTxWeight;
 protocol.b1PlusFiles = @() filesBetween('B1p Filename:','E1p Filename:');
 protocol.e1PlusFiles = @() filesBetween('E1p Filename:','# Rx:');
@@ -79,6 +80,13 @@ protocol.noiseLoading = @() readNoiseLoadingProtocol(lines);
     function value = valueAfter(label)
         index = fieldIndex(label)+1;
         value = lines{index};
+    end
+
+    function value = optionalValueAfter(label)
+        value = '';
+        if any(strcmp(lines,label))
+            value = valueAfter(label);
+        end
     end
 
     function index = fieldIndex(label)

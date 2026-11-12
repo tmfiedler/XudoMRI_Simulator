@@ -188,10 +188,22 @@ selected slice. Choose the image orientation and phase-encode direction in Setup
 per TR to acquire a 3D volume. It excites the full simulated volume.
 
 Set the isotropic **FOV**, **MatSize(1)** (samples per spoke), and **MatSize(2)**
-(number of spokes). More spokes improve angular coverage. All three gradient
-axes are enabled automatically; slice orientation and PE direction are disabled.
+(number of spokes). To set the acquired k-space extent independently of the
+sample count, enter **Acq. resolution (mm)**. For example, use 256 samples,
+51.2 kHz receiver bandwidth, and 5 mm nominal resolution for a 5 ms uniform
+readout to a nominal edge of 100 cycles/m. Leave the field blank to use the
+FOV- and sample-count-based prescription. More spokes improve angular coverage.
+All three gradient axes are enabled automatically. Slice orientation and PE
+direction are disabled.
 Radial TE is measured from RF center to readout onset. Reconstruction is for
 quick inspection.
+
+For a saved nominal resolution of 5 mm and a 400 mm FOV, `reco` defaults to
+an 80 × 80 × 80 matrix. Use **Matrix** to reconstruct the same data on a
+different grid. A matrix of 160 gives 2.5 mm voxel spacing across the same FOV
+and retains the same acquisition bandwidth. Clear the field and press Enter
+to return to the default. A smaller matrix can limit the reconstructed
+bandwidth.
 
 All generators use idealized gradients without enforcing scanner amplitude or
 slew-rate limits. Setup raises TE/TR requests below the sequence minimums.

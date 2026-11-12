@@ -134,8 +134,76 @@ for name = {'1H','23Na'}
         assert(max(abs(smokeSignals{1}-smokeSignals{2}))/ ...
             max(abs(smokeSignals{1}))<=signalTolerance,'GRE CPU/CUDA disagreement.');
     end
+
+    % Uniform radial readout at 5 mm nominal resolution over 400 mm FOV.
+    % Increase the sample count at fixed bandwidth and at fixed duration.
+    radialCases = [80 16; 256 16; 256 51.2]; % Samples per spoke, bandwidth in kHz.
+    for acquisition = radialCases.'
+        radialSamples = acquisition(1);
+        bandwidth = acquisition(2);
+        adc = struct('BW',bandwidth,'radialResolutionMm',5);
+        inter = RAD_3D(1,150,[radialSamples 8],[400 400],rf,adc, ...
+            struct('ss',1,'pe',1,'fe',1),0,struct('TH',.4,'offset',0),nucleus);
+        seq = combineSeqRect(inter,1,{'P--A'},0,true);
+        writeGenerated(fullfile(folder,'sequence.seqn'),seq);
+        expectedRadius = 100*((1:radialSamples)'-.5)/radialSamples;
+        % Each axis accumulates two float32 increments per dwell. Bound the
+        % relative rounding by n*u/(1-n*u), with eight extra operations for
+        % input quantization, unit conversion and increment calculation.
+        roundingBudget = (2*radialSamples+8)*double(eps('single'))/2;
+        radialTolerance = 100*roundingBudget/(1-roundingBudget);
+        for b = 1:numel(backends)
+            tag = sprintf('RAD_%d_%g',radialSamples,bandwidth);
+            [s,actualK] = simulate(repo,folder,backends{b},tag,nucleus);
+            radii = reshape(vecnorm(actualK),radialSamples,[]);
+            assert(numel(s)==radialSamples*8 && all(isfinite(s)),'Invalid radial signal payload.');
+            kerr = max(abs(radii-expectedRadius),[],'all');
+            assert(kerr <= radialTolerance, ...
+                '%s %s %d samples at %g kHz radial midpoint error %.6g cycles/m (bound %.6g).', ...
+                nucleus,backends{b},radialSamples,bandwidth,kerr,radialTolerance);
+            fprintf('PASS %-4s %-3s RAD_3D %3d samples/spoke at %g kHz, midpoint error %.3g cycles/m (bound %.3g)\n', ...
+                nucleus,backends{b},radialSamples,bandwidth,kerr,radialTolerance);
+        end
+    end
 end
-fprintf('PASS: requested backends and both nuclei. GUI/radial/noise coverage is separate.\n');
+checkRadialReconstruction();
+fprintf('PASS: requested backends and both nuclei. GUI and noise coverage is separate.\n');
+end
+
+function checkRadialReconstruction()
+% Synthetic point source, 5 mm acquisition at 80 mm FOV. Compare the complex
+% gridding result with direct evaluation at matched physical coordinates.
+fov = .08;
+point = [.01 -.015 .005];
+radii = ((1:48)'-.5) * (100/48);
+directions = [eye(3);-eye(3);[1 2 3]/sqrt(14);[-2 3 1]/sqrt(14)];
+k = radii .* reshape(directions,1,[],3);
+flatK = reshape(k,[],3);
+samples = exp(2i*pi*(flatK*point.'));
+% Gridding with the tabulated width-4 kernel is approximate. Allow 0.005
+% of the unit point peak over a grid of probe positions inside the FOV.
+tolerance = .005;
+for matrixSize = [8 15 16 32]
+    context = buildRadialReconstructionContext(k,matrixSize,[fov fov fov]);
+    inside = vecnorm(flatK,2,2) <= matrixSize/(2*fov);
+    assert(isequal(context.retained,inside),'Unexpected radial band selection.');
+    raw = samples;
+    raw(~inside) = 1000; % Out-of-band values must have no effect.
+    result = reconstructRadialDataset(reshape(raw,size(k,1),size(k,2)),context);
+    assert(isequal(size(result.volumeComplex),repmat(matrixSize,1,3)),'Incorrect reconstruction matrix.');
+    offsets = round((-4:3)*floor(matrixSize/2)/4);
+    [x,y,z] = ndgrid(offsets);
+    positions = [x(:),y(:),z(:)] * (fov/matrixSize);
+    weights = sum(flatK(inside,:).^2,2);
+    direct = exp(-2i*pi*(positions*flatK(inside,:).')) * ...
+        (samples(inside).*weights) / sum(weights);
+    index = floor(matrixSize/2)+1+offsets;
+    observed = result.volumeComplex(index,index,index);
+    err = max(abs(double(observed(:))-direct));
+    assert(err<=tolerance,'Radial %d^3 gridding error %.6g exceeds %.6g.',matrixSize,err,tolerance);
+    fprintf('PASS RAD_3D %2d^3 vs direct Fourier sum, peak-normalized error %.3g (limit %.3g)\n', ...
+        matrixSize,err,tolerance);
+end
 end
 
 function [signal,k] = simulate(repo,folder,backend,tag,nucleus,varargin)

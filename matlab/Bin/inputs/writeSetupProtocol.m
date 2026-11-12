@@ -1,5 +1,10 @@
 function writeSetupProtocol(filename,protocol)
 %WRITESETUPPROTOCOL Write a Setup snapshot in the current .prot format.
+hasRadialResolution = usesRadial3DWorkflow(protocol.sequenceType) && ...
+    isfield(protocol,'radialResolutionText') && ~isempty(strtrim(protocol.radialResolutionText));
+if hasRadialResolution
+    parseRadialResolutionMm(protocol.radialResolutionText);
+end
 fid = fopen(filename,'w');
 if fid >= 0
     cleanup = onCleanup(@() fclose(fid)); %#ok<NASGU>
@@ -57,6 +62,9 @@ writeField('Target B1+ (uT):',protocol.targetB1Text);
 writeField('FOV(mm)',num2str(protocol.fov));
 writeField('MatSize:',num2str(protocol.matrixSize));
 writeField('ADC Freq(kHz):',protocol.adcFrequencyText);
+if hasRadialResolution
+    writeField('Radial Acquisition Resolution(mm):',protocol.radialResolutionText);
+end
 writeField('TI_Duration(ms):',protocol.inversionTimeText);
 fprintf(fid,'  Gradient ON:\n');
 fprintf(fid,'    SS:\n      %s\n',num2str(protocol.sliceSelect));

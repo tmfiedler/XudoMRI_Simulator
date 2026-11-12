@@ -801,7 +801,8 @@ hDummyNum = uicontrol(hMain,'Style','edit',...
 
 % % % Display the PEDirect text.
 temp001=temp001+28+8; temp002 = temp002+3;
-uicontrol(hMain,'Style','text','string','PE Direction',...
+peDirectionX = temp001;
+hPEDirectLabel = uicontrol(hMain,'Style','text','string','PE Direction',...
     'Position',[temp001 temp002 80 13],...
     'BackgroundColor',[1,1,1]);
 
@@ -812,6 +813,12 @@ hPEDirectMenu = uicontrol(hMain,'Style','popup',...
     'Position',[temp001 temp002 75 13+7],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel',...
     'Callback',{@PEDirectMenu_Callback,''});
+
+hRadialResolutionLabel = uicontrol(hMain,'Style','text','String','Acq. resolution (mm)',...
+    'Position',[peDirectionX temp002+3 116 13],'BackgroundColor',[1,1,1],'Visible','off');
+hRadialResolution = uicontrol(hMain,'Style','edit','String','','UserData','',...
+    'Position',[peDirectionX+116 temp002 43 20],'BackgroundColor',[1,1,1],'Visible','off',...
+    'Tag','RadialAcquisitionResolution','Callback',@radialResolutionCallback);
 
 temp001=.345*temp01; temp002 = temp002-2;
 % % %  Display the Gen. Seq. button.
@@ -1243,6 +1250,9 @@ reset();
             FOV_Callback(source,eventdata,protocol.fovText());
             MatSize_Callback(source,eventdata,protocol.matrixSizeText());
             ADC_Freq_Callback(source,eventdata,protocol.adcFrequencyText());
+            if is3DRadSequenceName(getCurrentSequenceName())
+                setRadialResolutionText(protocol.radialResolutionText());
+            end
             TI_Duration_Callback(source,eventdata,protocol.inversionTimeText());
             % Legacy protocols may contain a saved Filter state. Match is now
             % an explicit one-shot action, so loading a protocol should not
@@ -1405,6 +1415,7 @@ reset();
         protocol.flipAngleText = get(hRF_FA,'String');
         protocol.targetB1Text = get(hTargetB1,'String');
         protocol.adcFrequencyText = get(hADC_Freq,'String');
+        protocol.radialResolutionText = get(hRadialResolution,'String');
         protocol.inversionTimeText = get(hTI,'String');
         protocol.teText = get(hTE,'String');
         protocol.trText = get(hTR,'String');
@@ -1882,6 +1893,7 @@ reset();
 
             % % % Display the ADC_Freq edit.
             set(hADC_Freq,'String','50','Enable','off');
+            resetRadialResolutionControls();
 
             % % % Display the #Tx edit.
             Tx.Num=sequenceChannels(1);
@@ -2740,6 +2752,9 @@ reset();
         end
 
         if is3DRadSequenceName(getCurrentSequenceName())
+            set([hRadialResolutionLabel,hRadialResolution],'Visible','on');
+            set(hRadialResolution,'Enable',get(hSeqType,'Enable'));
+            set([hPEDirectLabel,hPEDirectMenu],'Visible','off');
             set(hOrientationMenu,'Value',1,'Enable','off');
             set(hPEDirectMenu,'String',{'Not used'},'Value',1,'Enable','off');
             fovValue = get(hFOV,'Value');
@@ -2755,6 +2770,8 @@ reset();
             set(hFOV,'Value',[isoFov isoFov],'String',sprintf('%1.0f',isoFov));
             set(hMatSize_Pop,'String','Num Samples|Num Spokes');
         else
+            set([hRadialResolutionLabel,hRadialResolution],'Visible','off');
+            set([hPEDirectLabel,hPEDirectMenu],'Visible','on');
             set(hOrientationMenu,'Enable','on');
             setCartesianPEDirectionOptions();
             set(hFOV_Pop,'String','FOV FE|PE (mm)','Value',min(get(hFOV_Pop,'Value'),2));
@@ -3265,6 +3282,29 @@ reset();
         else
             set(hADC_Freq,'String',flag); 
         end;
+    end
+
+    function radialResolutionCallback(source,~)
+        try
+            setRadialResolutionText(get(source,'String'));
+        catch ME
+            set(source,'String',get(source,'UserData'));
+            errordlg(ME.message,'RAD_3D acquisition resolution');
+            return;
+        end
+        updateSeq();
+    end
+
+    function setRadialResolutionText(text)
+        text = strtrim(text);
+        parseRadialResolutionMm(text);
+        set(hRadialResolution,'String',text,'UserData',text);
+    end
+
+    function resetRadialResolutionControls()
+        set(hRadialResolution,'String','','UserData','');
+        set([hRadialResolutionLabel,hRadialResolution],'Visible','off');
+        set([hPEDirectLabel,hPEDirectMenu],'Visible','on');
     end
 
     %% --- Executes on hTx_Editbox.
@@ -3859,7 +3899,7 @@ end
 function available = hasRadialKspacePreview(plotInfo)
     available = isfield(plotInfo,'kspacePreview') && isstruct(plotInfo.kspacePreview) && ...
         isfield(plotInfo.kspacePreview,'spokeDirections') && ...
-        isfield(plotInfo.kspacePreview,'samplesPerSpoke') && ...
+        isfield(plotInfo.kspacePreview,'samplesPerSpoke') && isfield(plotInfo.kspacePreview,'kEdge') && ...
         size(plotInfo.kspacePreview.spokeDirections,2) == 3;
 end
 
@@ -3876,30 +3916,29 @@ function plotKspacePreview3D(hAxes,kspacePreview)
         numPreview = min(numPreview,kspacePreview.previewSpokes);
     end
 
-    samplesPerSpoke = max(2,round(kspacePreview.samplesPerSpoke));
-    radii = linspace(0,1,samplesPerSpoke)';
+    samplesPerSpoke = kspacePreview.samplesPerSpoke;
+    radii = ((1:samplesPerSpoke)' - 0.5) * (kspacePreview.kEdge / samplesPerSpoke);
     spokeColors = lines(max(numPreview,1));
 
     cla(hAxes);
     hold(hAxes,'on');
     for idx = 1:numPreview
         traj = radii * spokeDirections(idx,:);
-        plot3(hAxes,traj(:,1),traj(:,2),traj(:,3),...
+        plot3(hAxes,traj(:,1),traj(:,2),traj(:,3),'.-',...
             'LineWidth',1.5,'Color',spokeColors(idx,:));
-        plot3(hAxes,traj(1,1),traj(1,2),traj(1,3),'.',...
-            'MarkerSize',16,'Color',spokeColors(idx,:));
     end
 
     plot3(hAxes,0,0,0,'ko','MarkerFaceColor','k','MarkerSize',5);
     hold(hAxes,'off');
     grid(hAxes,'on');
     axis(hAxes,'equal');
-    xlim(hAxes,[-1.05 1.05]);
-    ylim(hAxes,[-1.05 1.05]);
-    zlim(hAxes,[-1.05 1.05]);
-    xlabel(hAxes,'k_x (norm)');
-    ylabel(hAxes,'k_y (norm)');
-    zlabel(hAxes,'k_z (norm)');
+    limits = [-1.05 1.05] * kspacePreview.kEdge;
+    xlim(hAxes,limits);
+    ylim(hAxes,limits);
+    zlim(hAxes,limits);
+    xlabel(hAxes,'k_x (cycles/m)');
+    ylabel(hAxes,'k_y (cycles/m)');
+    zlabel(hAxes,'k_z (cycles/m)');
     title(hAxes,sprintf('3D K-Space Preview (first %d spokes)',numPreview));
     view(hAxes,35,25);
 end
@@ -4582,6 +4621,9 @@ end
         settings.RF.Shape = get(hRF_Shape,'Value');
         settings.RF.FA = str2double(get(hRF_FA,'String')); % degrees
         settings.ADC.BW = str2double(get(hADC_Freq,'String')); % kHz
+        if is3DRadSequenceName(getCurrentSequenceName())
+            settings.ADC.radialResolutionMm = parseRadialResolutionMm(get(hRadialResolution,'String'));
+        end
         settings.GradOn.ss = get(hSS,'Value');
         settings.GradOn.fe = get(hFE,'Value');
         settings.GradOn.pe = get(hPE,'Value');
@@ -5014,6 +5056,7 @@ end
 
         % % % Display the ADC_Freq edit.
         set(hADC_Freq,'String','50','Enable','off');
+        resetRadialResolutionControls();
 
         % % % Display the Tx edit.
         set(hTx,'String','1','Enable','off');
