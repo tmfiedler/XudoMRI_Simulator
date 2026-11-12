@@ -91,6 +91,9 @@ See [map details](FILE_FORMATS.md#delta-b0-map).
 The three panes show orthogonal views of the loaded model. `Display` selects
 ID, relaxation, concentration (mol/L), chemical-shift, conductivity, or mass-density data
 available in the tissue file. `Scale` selects linear or logarithmic display.
+Scroll over a pane to zoom and drag to pan within the image. Use **Restore
+View** in that pane's axes toolbar to fit the image again. Each pane keeps its
+view as you change slices. Loading geometry fits all three panes again.
 
 | Control | Meaning |
 | --- | --- |

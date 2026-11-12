@@ -18,6 +18,9 @@ when their stored contract changes.
 
 ### Features
 
+- The three Setup geometry previews support independent zoom and pan and keep
+  their views when slices change. Scroll and drag are handled by the Setup
+  window on classic MATLAB figures. Panning stays within the image bounds.
 - `RAD_3D` supports a nominal acquisition resolution independent of samples per
   spoke. The reconstruction viewer uses the saved resolution for its default
   matrix and supports an override for radial data. Deapodization operates on
@@ -31,6 +34,9 @@ when their stored contract changes.
 
 ### Fixes
 
+- Widened the Geometry Editor coordinate and slice-position fields and aligned
+  the FOV dropdown with the adjacent inputs. The FOV controls leave more
+  clearance beside the axial preview.
 - Removed tooltips from the version badge, noise loading button, radial
   acquisition resolution field, job details line, and reconstruction Log checkbox.
 

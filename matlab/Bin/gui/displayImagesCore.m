@@ -90,11 +90,22 @@ function hOverlay = createFOVOverlay(axisHandle,hideOverlay,position)
 end
 
 function renderSlice(ax, imageMatrix)
-    cla(ax);
-    imagesc(ax, imageMatrix);
-    axis(ax, 'image');
-    axis(ax, 'off');
-    colormap(ax, gray);
+    sliceImage = findobj(ax, 'Type', 'image', 'Tag', 'GeometrySlice');
+    if isempty(sliceImage)
+        cla(ax);
+        imagesc(ax, imageMatrix, 'Tag', 'GeometrySlice');
+        axis(ax, 'image');
+        ax.XAxis.Visible = 'off';
+        ax.YAxis.Visible = 'off';
+        colormap(ax, gray);
+        zoom(ax, 'reset');
+        ax.Interactions = [];
+        axtoolbar(ax, {'restoreview'});
+    else
+        % Updating the raster in place preserves the view and its reset point.
+        sliceImage.CData = imageMatrix;
+        delete(findobj(ax, 'Type', 'rectangle'));
+    end
 end
 
 function index = clampIndex(index, maxIndex)
