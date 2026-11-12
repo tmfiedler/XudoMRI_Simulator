@@ -15,6 +15,9 @@ when their stored contract changes.
 
 ## Unreleased
 
+- The radial trajectory viewer marks the individual samples in its 3D and
+  radius plots. The reconstruction viewer pairs the Rx and display controls
+  with their labels and gives the lower controls more vertical space.
 
 ## 2026.0
 

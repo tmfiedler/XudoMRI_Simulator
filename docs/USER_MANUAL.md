@@ -322,7 +322,7 @@ reco
 | **Sagittal / Coronal / Axial Slice** | Move through the volume; the number beside each slider is the voxel index. Cartesian data contains one image plane. |
 | **Export View** | Choose Axial, Sagittal, Coronal or K-Space. |
 | **Export View Port** | Open the chosen pane in a separate MATLAB figure for saving. |
-| **View Trajectory** | Preview the loaded radial k-space trajectory; radial data only. |
+| **View Trajectory** | Show the exported k-space sample positions and plot their radii by sample index for up to 64 radial spokes. |
 | **SNR Map** | For radial data, use the loaded noise and a second independent noise set to estimate SNR. **Noise Scale** must be greater than zero. |
 | **Log** | Show diagnostic messages in the MATLAB Command Window. |
 
