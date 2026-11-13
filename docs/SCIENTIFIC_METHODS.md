@@ -183,6 +183,26 @@ Implementation: [Voxel.cpp](../engine/signal/src/Voxel.cpp),
 
 ## Encoding and ADC timing
 
+With a scanner profile, GRE, SE and GRE_EPI design linear ramps under the configured
+per-axis amplitude and slew limits. The gradient raster sets the duration of
+each ramp step. RF, ADC and gradient plateau timing can use other intervals.
+Export holds each ramp step at its mean amplitude to preserve its area.
+For readout amplitude G and rise time t, the prephaser area is
+−G(Tadc + t)/2 so the readout plateau starts at the intended k-space position.
+Slice refocusing cancels the area from the RF center through the slice ramp
+down. RF and ADC remain on their respective plateaus. TE is measured from
+excitation center to ADC midpoint, and minimum TR includes the readout ramp down.
+SE places the refocusing center at TE/2 and balances each half of its slice
+plateau plus the adjacent ramp with an opposing lobe. In-plane encoding
+starts after the refocusing RF pulse. Post-ADC rewinders balance the full
+readout and phase-encode moments and are included in minimum TR.
+
+GRE_EPI preserves TE from excitation center to the center of the whole echo
+train. Samples are taken on alternating flat tops. Between lines, opposite
+readout ramps sum to zero gradient area, while a phase blip advances by one
+phase-encode step. Echo spacing is the line duration plus the longer of the
+readout reversal and the phase blip. Minimum TR includes the final ramp down.
+
 **Used by sequence generation and signal acquisition.** The nominal trajectory
 integrates the programmed gradients:
 
@@ -216,8 +236,11 @@ gradient magnitude in T/m is `k_edge/(γ_Hz T_read)`, with gyromagnetic ratio
 ADC bandwidth in Hz. The rewinder cancels the full readout gradient area.
 Radial TE is RF center to **ADC onset**;
 the first stored sample is half a radial step from zero. Spoke count controls
-angular coverage. The sequence assumes ideal gradient waveforms; hardware
-slew/amplitude limits and scanner realizability are not established. Coherent
+angular coverage. With a scanner profile, the largest absolute axis projection
+across the prescribed spokes determines the common scalar amplitude and slew
+limits. A negative prephaser cancels the rising ramp area, preserving zero at
+ADC onset. The rewinder cancels the plateau and falling ramp areas. The
+waveform represents programmed gradients under these limits. Coherent
 Bloch state persists between TRs unless an explicit crusher acts; no automatic
 RF-spoiling model is added.
 

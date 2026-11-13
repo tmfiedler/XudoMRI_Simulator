@@ -767,7 +767,7 @@ hFE=uicontrol(hMain,'Style','checkbox','string','FE','Value',1,...
     'BackgroundColor',[1,1,1],'Callback',{@FE_Callback,''});
 
 % % % Display the TE text.
-temp001=temp001+38+30;
+temp001=temp001+38+4;
 hTELabel = uicontrol(hMain,'Style','text','string','TE (ms)',...
     'Position',[temp001 temp002 42 13],...
     'BackgroundColor',[1,1,1]);
@@ -780,7 +780,7 @@ hTE = uicontrol(hMain,'Style','edit',...
     'BackgroundColor',[1,1,1],'BusyAction','cancel',...
     'Callback',{@TE_Callback,''});
 
-temp001=temp001+40+26; temp002 = temp002+3;
+temp001=temp001+40+2; temp002 = temp002+3;
 % % % Display the TR text.
 hTRLabel = uicontrol(hMain,'Style','text','string','TR (ms)',...
     'Position',[temp001 temp002 42 13],...
@@ -792,6 +792,15 @@ hTR = uicontrol(hMain,'Style','edit','String','500',...
     'Position',[temp001 temp002 45 13+7],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel',...
     'Callback',{@TR_Callback,''});
+
+scannerProfiles = readScannerProfiles();
+scannerProfile = [];
+scannerMenuProfiles = scannerProfiles;
+uicontrol(hMain,'Style','text','String','Scanner',...
+    'Position',[temp001+47 temp002+3 50 13],'BackgroundColor',[1,1,1]);
+hScanner = uicontrol(hMain,'Style','popupmenu','String',[{'None'},{scannerProfiles.name}],...
+    'Position',[temp001+97 temp002 70 20],'BackgroundColor',[1,1,1],...
+    'Enable','off','Callback',@scannerCallback);
 
 % % % Display the #DummyTR text.
 temp001=.02*temp01; temp002 = temp002-vGap+3;
@@ -1284,6 +1293,7 @@ reset();
             
             TE_Callback(source,eventdata,protocol.teText());
             TR_Callback(source,eventdata,protocol.trText());
+            setScannerProfile(protocol.scannerProfile());
             
             NumIso_Callback(source,eventdata,protocol.numIsoText());
             
@@ -1300,11 +1310,12 @@ reset();
 
             displayInfo.HideFOVOverlay = false;
             updateBusyState('Restoring sequence preview...');
-            restoreLoadedSequencePreview();
+            restoredPreview = restoreLoadedSequencePreview();
             updateTargetFlipAngleDisplay();
             updateReadoutTooltips();
             slice = readSequenceSlice(inputInfo);
-            if radialAxesRestored || (~protocol.hasUnifiedFOV && slice.offset ~= 0)
+            if radialAxesRestored || (~protocol.hasUnifiedFOV && slice.offset ~= 0) || ...
+                    (~isempty(scannerProfile) && ~restoredPreview)
                 markSequenceDirty();
             else
                 markSequenceClean();
@@ -1397,6 +1408,7 @@ reset();
         protocol.scale = selectedProtocolMenuText(hScaleMenu);
         protocol.sliceOrientation = selectedProtocolMenuText(hOrientationMenu);
         protocol.sequenceType = selectedProtocolMenuText(hSeqType);
+        protocol.scannerProfile = scannerProfile;
         protocol.rfShape = selectedProtocolMenuText(hRF_Shape);
         protocol.phaseEncodeDirection = selectedProtocolMenuText(hPEDirectMenu);
         protocol.mode = selectedProtocolMenuText(hMode);
@@ -1731,6 +1743,7 @@ reset();
             
             set(hExpSeq,'Enable','on');
             set(hSeqType,'Enable','on');
+            updateScannerControl();
             set(hRF_Shape,'Enable','on');
             set(hRF_Duration,'Enable','on');
             set(hRF_Num,'Enable','on');
@@ -1881,6 +1894,7 @@ reset();
 
             % % % Display the SequenceType menu.
             set(hSeqType,'Value',1,'Enable','off');
+            setScannerProfile([]);
 
             % % % Display the RF_Shape menu.
             set(hRF_Shape,'Value',1,'Enable','off');
@@ -2355,7 +2369,11 @@ reset();
         set(hGeoSliceTH,'String',num2str(thickness,'%.9g'));
         refreshGeometryDisplay();
         if isInteractive
-            updateReadoutTooltips();
+            if isempty(scannerProfile)
+                updateReadoutTooltips();
+            else
+                updateSeq();
+            end
         end
         markSequenceDirty();
     end
@@ -2732,6 +2750,9 @@ reset();
         global geoData;
 
         if strcmp(flag,'')==1
+            if ~supportsScannerProfile(getCurrentSequenceName())
+                setScannerProfile([]);
+            end
             updateSequenceSpecificFieldLabels();
             updateSeq();
             if ~isempty(geoData)
@@ -2754,6 +2775,7 @@ reset();
     end
 
     function updateSequenceSpecificFieldLabels()
+        updateScannerControl();
         updateRadialAxisControls();
         if sequenceUsesTI(getCurrentSequenceName()) && strcmpi(get(hSeqType,'Enable'),'on')
             set(hTILabel,'Enable','on');
@@ -2917,6 +2939,10 @@ reset();
     function Nucleus_Callback(source,eventdata,flag) %#ok<INUSD,INUSD>
         if strcmp(flag,'')==1
             updateLarmorTooltips();
+            if ~isempty(scannerProfile)
+                updateSeq();
+                return;
+            end
             updateReadoutTooltips();
             updateTargetFlipAngleDisplay();
             markSequenceDirty();
@@ -3463,7 +3489,7 @@ reset();
     function SeqGen_Callback(source,eventdata) %#ok<INUSD,INUSD>
         global inputInfo displayInfo;
         updateRadialAxisControls();
-        if strcmp(getCurrentSequenceName(),'SE')
+        if strcmp(getCurrentSequenceName(),'SE') || ~isempty(scannerProfile)
             updateSeq(); % Loaded short-timing protocols use the corrected limits.
         end
                 
@@ -3639,10 +3665,23 @@ function SeqPlot_Callback(source,eventdata)
 
     beginBusyState('Rendering sequence plot...');
     seqPlotBusyCleanup = onCleanup(@() endBusyState()); %#ok<NASGU>
-    renderSequencePreview(sequenceState.previewWaveform);
+    waveform = sequenceState.previewWaveform;
+    if is3DRadSequenceName(getCurrentSequenceName())
+        renderSequencePreview(waveform);
+        return;
+    end
+    orientation = get(hOrientationMenu,'Value');
+    direction = {selectedProtocolMenuText(hPEDirectMenu)};
+    converted = combineSeqRect(waveform,orientation,direction,0);
+    modelAxes = cartesianAxes(orientation,false);
+    inPlane = sort(modelAxes(1:2));
+    gradientFields = {'Gx','Gy','Gz'};
+    [~,gammaHz] = getNucleusGamma(getCurrentNucleus());
+    [path,samples] = cartesianTrajectoryPreview(converted.Main,gradientFields(inPlane),gammaHz);
+    renderSequencePreview(waveform,path,samples,inPlane);
 end
 
-function renderSequencePreview(interSeqData)
+function renderSequencePreview(interSeqData,path,samples,inPlane)
     % ---- NEW: how many excitations/TRs to plot ----
     nex = 16;  % plot first 16 RF excitations (edit as desired)
 
@@ -3692,10 +3731,17 @@ function renderSequencePreview(interSeqData)
     dADC1   = diff([0, interSeqData.Main.ADC.value]);
 
     % ---- Figure ----
+    figWidth = 1000;
+    if nargin > 1
+        figWidth = 1320;
+    end
     hSeqPlotFig=figure('Visible','on','MenuBar','none','Name','Sequence Plot',...
-        'NumberTitle','off','Position',[100,100,1000,800],'Resize','off',...
+        'NumberTitle','off','Position',[100,100,figWidth,800],'Resize','off',...
         'Toolbar','figure','Color',[1,1,1]);
     movegui(hSeqPlotFig,'center');
+    if nargin > 1
+        subplot(1,2,1,'Parent',hSeqPlotFig);
+    end
 
     timeMax = nex*TRms * 5/4;
     xlim([0 timeMax]);
@@ -3813,6 +3859,20 @@ function renderSequencePreview(interSeqData)
     title('Pulse Sequence Diagram');
     xlabel('Time(ms)');
     hold off;
+    if nargin == 1
+        return;
+    end
+    hKspaceAxes = subplot(1,2,2,'Parent',hSeqPlotFig);
+    plot(hKspaceAxes,path(:,1),path(:,2),'-','Color',[.55 .60 .67]);
+    hold(hKspaceAxes,'on');
+    plot(hKspaceAxes,samples(:,1),samples(:,2),'.','Color',[0 .32 .68]);
+    hold(hKspaceAxes,'off');
+    axis(hKspaceAxes,'equal');
+    grid(hKspaceAxes,'on');
+    axisNames = 'xyz';
+    xlabel(hKspaceAxes,sprintf('k_%c (cycles/m)',axisNames(inPlane(1))));
+    ylabel(hKspaceAxes,sprintf('k_%c (cycles/m)',axisNames(inPlane(2))));
+    title(hKspaceAxes,'2D K-Space Preview');
 end
 
 function handled = plotExcitationPreview(interSeqData,defaultNex)
@@ -4548,16 +4608,19 @@ end
         sequenceName = sequenceNames{sequenceIndex};
         TI.duration = str2double(get(hTI,'String'));
         TI.handle = hTI;
+        if ~isempty(scannerProfile)
+            settings = applyScannerBounds(settings,slice);
+        end
         [minTE,minTR] = dispatchSequence(sequenceName,sequenceIndex,settings,slice,TI);
 
-        if strcmp(sequenceName,'SE')
+        if strcmp(sequenceName,'SE') || ~isempty(scannerProfile)
             % Round limits upward; recompute TR for the TE actually displayed.
-            if str2double(get(hTE,'String')) < minTE
+            if ~isfinite(settings.TE) || settings.TE < minTE
                 set(hTE,'String',sprintf('%.4f',ceil(minTE*10000)/10000));
             end
             settings.TE = str2double(get(hTE,'String'));
             [~,minTR] = dispatchSequence(sequenceName,sequenceIndex,settings,slice,TI);
-            if str2double(get(hTR,'String')) < minTR
+            if ~isfinite(settings.TR) || settings.TR < minTR
                 set(hTR,'String',sprintf('%.4f',ceil(minTR*10000)/10000));
             end
         else
@@ -4609,7 +4672,20 @@ end
                 % Use the displayed TE for the TR limit. Omit the TI control
                 % so this timing query leaves protocol settings untouched.
                 slice = readSequenceSlice(inputInfo);
-                [minTE,minTR] = dispatchSequence(sequenceName,get(hSeqType,'Value'),settings,slice,[]);
+                if ~isempty(scannerProfile) && settings.GradOn.fe
+                    maxBW = scannerBounds(settings,slice);
+                    bwTip = sprintf('%s\nScanner maximum: %.6g kHz.',bwTip,maxBW);
+                end
+                try
+                    [minTE,minTR] = dispatchSequence(sequenceName,get(hSeqType,'Value'),settings,slice,[]);
+                catch exception
+                    if isempty(scannerProfile)
+                        rethrow(exception);
+                    end
+                    bwTip = sprintf('%s\n%s',bwTip,exception.message);
+                    minTE = NaN;
+                    minTR = NaN;
+                end
                 if isreal(minTE) && isfinite(minTE)
                     teTip = sprintf('Minimum TE for the current settings: %.6g ms.',minTE);
                 end
@@ -4651,9 +4727,92 @@ end
     end
 
     function varargout = dispatchSequence(sequenceName,sequenceIndex,settings,slice,TI)
+        if supportsScannerProfile(sequenceName) && ~isempty(scannerProfile)
+            generator = str2func(sequenceName);
+            [varargout{1:nargout}] = generator(settings.TE,settings.TR,settings.MatSize, ...
+                settings.FOV,settings.RF,settings.ADC,settings.GradOn,settings.Dummy, ...
+                slice,getCurrentNucleus(),scannerProfile.limits);
+            return;
+        end
         [varargout{1:nargout}] = SeqInterfaceOut(sequenceName,sequenceIndex, ...
             settings.TE,settings.TR,settings.MatSize,settings.FOV,settings.RF, ...
             settings.ADC,settings.GradOn,settings.Dummy,slice,TI,getCurrentNucleus());
+    end
+
+    function scannerCallback(source,~)
+        index = get(source,'Value')-1;
+        if index == 0
+            setScannerProfile([]);
+        else
+            setScannerProfile(scannerMenuProfiles(index));
+        end
+        updateSeq();
+    end
+
+    function setScannerProfile(profile)
+        if ~isempty(profile) && ~supportsScannerProfile(getCurrentSequenceName())
+            error('Setup:ScannerSequence','This sequence does not support scanner profiles.');
+        end
+        scannerProfile = profile;
+        scannerMenuProfiles = scannerProfiles;
+        names = {scannerMenuProfiles.name};
+        index = 0;
+        if ~isempty(profile)
+            index = find(strcmp(profile.name,names),1);
+            if isempty(index) || ~isequal(profile.limits,scannerMenuProfiles(index).limits)
+                scannerMenuProfiles(end+1) = profile;
+                names{end+1} = [profile.name ' (saved)'];
+                index = numel(names);
+            end
+        end
+        set(hScanner,'String',[{'None'},names],'Value',index+1);
+        updateScannerControl();
+    end
+
+    function updateScannerControl()
+        enabled = supportsScannerProfile(getCurrentSequenceName()) && strcmp(get(hSeqType,'Enable'),'on');
+        states = {'off','on'};
+        set(hScanner,'Enable',states{1+enabled});
+    end
+
+    function supported = supportsScannerProfile(sequenceName)
+        supported = any(strcmp(sequenceName,{'GRE','SE','GRE_EPI','RAD_3D'}));
+    end
+
+    function [maxBW,minRF] = scannerBounds(settings,slice)
+        [~,gammaHz] = getNucleusGamma(getCurrentNucleus());
+        maxGradient = scannerProfile.limits(1);
+        if is3DRadSequenceName(getCurrentSequenceName())
+            matrix = max(1,round(settings.MatSize));
+            [kEdge,~,maxComponent] = radialReadoutGeometry(matrix,settings.FOV,settings.ADC);
+            maxBW = radialGradientBounds(matrix(1),kEdge,maxComponent,gammaHz,maxGradient);
+            minRF = 0; % RAD_3D is nonselective.
+        else
+            [maxBW,minRF] = cartesianGradientBounds(settings.FOV(1),slice.TH, ...
+                settings.GradOn,gammaHz,maxGradient);
+        end
+    end
+
+    function settings = applyScannerBounds(settings,slice)
+        [maxBW,minRF] = scannerBounds(settings,slice);
+        if ~isfinite(settings.ADC.BW) || settings.ADC.BW <= 0
+            settings.ADC.BW = 50;
+            set(hADC_Freq,'String','50');
+        end
+        if ~isfinite(settings.RF.Duration) || settings.RF.Duration <= 0
+            settings.RF.Duration = 2.6;
+            set(hRF_Duration,'String','2.6');
+        end
+        if settings.ADC.BW > maxBW
+            settings.ADC.BW = maxBW;
+            set(hADC_Freq,'String',sprintf('%.17g',settings.ADC.BW));
+            warnSetup('Receiver bandwidth reduced to %.6g kHz for the scanner gradient limit.',settings.ADC.BW);
+        end
+        if settings.RF.Duration < minRF
+            settings.RF.Duration = ceil(minRF*1e6)/1e6;
+            set(hRF_Duration,'String',sprintf('%.15g',settings.RF.Duration));
+            warnSetup('RF duration increased to %.6g ms for the scanner gradient limit.',settings.RF.Duration);
+        end
     end
 
     function ready = ensureCurrentSequence(source,eventdata,action,cancelMessage)
@@ -5035,6 +5194,7 @@ end
         
         % % % Display the SequenceType menu.
         set(hSeqType,'Value',1,'Enable','off');
+        setScannerProfile([]);
         
         % % % Display the RF_Shape menu.
         set(hRF_Shape,'Value',1,'Enable','off');

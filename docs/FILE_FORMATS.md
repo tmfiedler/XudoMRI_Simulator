@@ -207,6 +207,13 @@ Leave these inputs unset for normal use.
 
 ## Sequence (`.seqn`)
 
+Scanner-limited sequences use the same interval layout. Setup reads named profiles
+from `config/scanner.yaml`, with positive numeric fields
+`max_gradient_mT_per_m`, `max_slew_T_per_m_per_s` and `gradient_raster_us`.
+For a selected profile, the protocol stores `Scanner Profile:` and
+`Scanner Gradient Limits:`, with amplitude, slew and raster in that order and
+in the YAML units. Protocols without these fields select None.
+
 The entire file is float32. It starts with these **five values**:
 
 ```text

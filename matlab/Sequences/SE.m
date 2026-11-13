@@ -5,7 +5,7 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function varargout = SE(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
+function varargout = SE(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus,scannerLimits)
 
 DEBUG = 0;
 
@@ -27,39 +27,54 @@ DEBUG = 0;
     if nargin < 10 || isempty(nucleus)
         nucleus = getDefaultNucleus();
     end
-    gamma = getNucleusGamma(nucleus);
+    [gamma,gammaHz] = getNucleusGamma(nucleus);
     GMax = 22; %mT/m
     
     ADC.duration = MatSize1/ADC.BW; %ms
+    rfStart = startTime;
+    ramped = nargin >= 11 && ~isempty(scannerLimits);
 
-    % Use the same effective timing for limit queries and waveform generation.
-    % Every endpoint is measured from TR start in milliseconds. In particular,
-    % the phase rewinder can finish later than the readout rewinder.
-    phaseDuration = 0;
-    if GradOn.pe == 1 && MatSize2 > 1
-        phaseDuration = 1/(FOV2/1000)/gamma*2*pi/(2*GMax/(MatSize2-1)/1000)*1000;
+    if ramped
+        args = {TE,TR,[MatSize1,MatSize2],[FOV1,FOV2],RF.Duration,ADC.BW, ...
+            GradOn,slice,gammaHz,scannerLimits,startTime,'SE'};
+        if nargout == 2
+            timing = cartesianRampedGradients(args{:});
+            varargout = {timing.minTE,timing.minTR};
+            return;
+        end
+        [timing,gradients] = cartesianRampedGradients(args{:});
+        TE = timing.TE;
+        TR = timing.TR;
+        rfStart = timing.rfStart;
+    else
+        % Endpoints are measured from TR start. The phase rewinder can
+        % finish later than the readout rewinder.
+        phaseDuration = 0;
+        if GradOn.pe == 1 && MatSize2 > 1
+            phaseDuration = 1/(FOV2/1000)/gamma*2*pi/(2*GMax/(MatSize2-1)/1000)*1000;
+        end
+        readoutRewind = 0;
+        if GradOn.fe == 1, readoutRewind = ADC.duration/3; end
+        sliceReph = 0;
+        slicePost = 0;
+        if GradOn.ss == 1
+            sliceReph = RF.Duration/2/5;
+            slicePost = RF.Duration/5;
+        end
+        minTE = max(2*(RF.Duration+sliceReph+slicePost), ...
+            RF.Duration+ADC.duration+2*(slicePost+phaseDuration+readoutRewind));
+        TE = max(TE,minTE);
+        rfEnd = startTime+TE/2+RF.Duration;
+        adcEnd = startTime+TE+RF.Duration/2+ADC.duration/2;
+        endpoints = [rfEnd,adcEnd,adcEnd+readoutRewind, ...
+            adcEnd+phaseDuration,rfEnd+slicePost];
+        if dummy > 0
+            % Preserve the historical dummy RF shift even with slice selection off.
+            endpoints(end+1) = rfEnd+RF.Duration/5;
+        end
+        minTR = max(endpoints);
+        TR = max(TR,minTR);
     end
-    readoutRewind = 0;
-    if GradOn.fe == 1, readoutRewind = ADC.duration/3; end
-    sliceReph = 0;
-    slicePost = 0;
-    if GradOn.ss == 1
-        sliceReph = RF.Duration/2/5;
-        slicePost = RF.Duration/5;
-    end
-    minTE = max(2*(RF.Duration+sliceReph+slicePost), ...
-        RF.Duration+ADC.duration+2*(slicePost+phaseDuration+readoutRewind));
-    TE = max(TE,minTE);
-    rfEnd = startTime+TE/2+RF.Duration;
-    adcEnd = startTime+TE+RF.Duration/2+ADC.duration/2;
-    endpoints = [rfEnd,adcEnd,adcEnd+readoutRewind, ...
-        adcEnd+phaseDuration,rfEnd+slicePost];
-    if dummy > 0
-        % Preserve the historical dummy RF shift even with slice selection off.
-        endpoints(end+1) = rfEnd+RF.Duration/5;
-    end
-    minTR = max(endpoints);
-    TR = max(TR,minTR);
     
     frqBW = 4/RF.Duration*1000; % RF.Duration = 4/frqBW*1000; % ms
     if GradOn.ss == 1
@@ -142,8 +157,8 @@ DEBUG = 0;
             varargout{1}.Main.RF.tStep = [startTime,ones(1,RF.Num)/RF.Freq,max(TE/2-RF.Duration,0),...
                 ones(1,80)/RF.Freq,max(TR-startTime-RF.Duration-TE/2,0)]; % ms; 1kHz = 1ms
         else
-            varargout{1}.Main.RF.tStep = [startTime,ones(1,RF.Num)/RF.Freq,max(TE/2-RF.Duration,0),...
-                ones(1,RF.Num)/RF.Freq,max(TR-startTime-RF.Duration-TE/2,0)]; % ms; 1kHz = 1ms
+            varargout{1}.Main.RF.tStep = [rfStart,ones(1,RF.Num)/RF.Freq,max(TE/2-RF.Duration,0),...
+                ones(1,RF.Num)/RF.Freq,max(TR-rfStart-RF.Duration-TE/2,0)]; % ms; 1kHz = 1ms
         end;
         varargout{1}.Main.RF.value = [0+0i,tempRF_Y1.*(1+0i),0+0i,tempRF_Y2.*(1+0i),0+0i];
         
@@ -154,13 +169,7 @@ DEBUG = 0;
         end;
         
         %% RF DFreq
-        if DEBUG == 1
-            varargout{1}.Main.DFreq.tStep = [startTime,ones(1,RF.Num)/RF.Freq,max(TE/2-RF.Duration,0),...
-                ones(1,80)/RF.Freq,max(TR-startTime-RF.Duration-TE/2,0)]; % ms; 1kHz = 1ms
-        else
-            varargout{1}.Main.DFreq.tStep = [startTime,ones(1,RF.Num)/RF.Freq,max(TE/2-RF.Duration,0),...
-                ones(1,RF.Num)/RF.Freq,max(TR-startTime-RF.Duration-TE/2,0)]; % ms; 1kHz = 1ms
-        end;
+        varargout{1}.Main.DFreq.tStep = varargout{1}.Main.RF.tStep;
         if DEBUG == 1            
             varargout{1}.Main.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0,ones(1,80)*0,0];
         else
@@ -173,14 +182,29 @@ DEBUG = 0;
         end;
         
         %% ADC
-        varargout{1}.Main.ADC.tStep = [startTime,TE+RF.Duration/2-ADC.duration/2,...
-            ones(1,MatSize1)/ADC.BW,max(TR-TE-RF.Duration/2-startTime-ADC.duration/2,0)]; % ms
+        varargout{1}.Main.ADC.tStep = [startTime,TE+RF.Duration/2-ADC.duration/2+(rfStart-startTime),...
+            ones(1,MatSize1)/ADC.BW,max(TR-TE-RF.Duration/2-rfStart-ADC.duration/2,0)]; % ms
         varargout{1}.Main.ADC.value = [-1,0,ones(1,MatSize1),0];
         
         if dummy>0
             varargout{1}.Dummy.ADC.tStep = varargout{1}.Dummy.tStep;
             varargout{1}.Dummy.ADC.value = [-1,zeros(1,2*RF.Num+2)];
         end;
+
+        varargout{1}.TR = TR;
+        varargout{1}.Main.repeat = MatSize2;
+        varargout{1}.Dummy.repeat = dummy;
+        if ramped
+            for channel = fieldnames(gradients).'
+                axis = channel{1};
+                varargout{1}.Main.(axis) = gradients.(axis);
+                if dummy > 0
+                    varargout{1}.Dummy.(axis) = struct('tStep',varargout{1}.Dummy.tStep, ...
+                        'value',zeros(1,2*RF.Num+3));
+                end
+            end
+            return;
+        end
 
         %% Slice Selection gradient
         if GradOn.ss == 1
@@ -268,10 +292,6 @@ DEBUG = 0;
             varargout{1}.Dummy.Gfe.value = zeros(1,2*RF.Num+3);
         end;
         
-        %%
-        varargout{1}.TR = TR; %ms
-        varargout{1}.Main.repeat = MatSize2;
-        varargout{1}.Dummy.repeat = dummy;
     end;
 
     %% Return [minTE, minTR]

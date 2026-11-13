@@ -54,6 +54,10 @@ fprintf(fid,'\nIMAGING PARAMETER SETUP:\n');
 writeField('B0(T):',protocol.b0Text);
 writeField('Nucleus:',protocol.nucleus);
 writeField('Sequence Type:',protocol.sequenceType);
+if isfield(protocol,'scannerProfile') && ~isempty(protocol.scannerProfile)
+    writeField('Scanner Profile:',protocol.scannerProfile.name);
+    writeField('Scanner Gradient Limits:',sprintf('%.17g %.17g %.17g',protocol.scannerProfile.limits));
+end
 writeField('RF Shape:',protocol.rfShape);
 writeField('RF Duration(ms):',protocol.rfDurationText);
 writeField('# Points in RF Pulse:',protocol.rfCountText);

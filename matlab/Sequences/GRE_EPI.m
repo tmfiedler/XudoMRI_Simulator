@@ -1,4 +1,4 @@
-function varargout = GRE_EPI(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
+function varargout = GRE_EPI(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus,scannerLimits)
 
     %% Init
     MatSize1=MatSize(1);
@@ -32,6 +32,19 @@ function varargout = GRE_EPI(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus
         frqOffset = 0;
     end
     RF.Freq = RF.Num / RF.Duration; % kHz
+    rfStart = startTime;
+    ramped = nargin >= 11 && ~isempty(scannerLimits);
+    if ramped
+        args = {TE,TR,[MatSize1,MatSize2],[FOV1,FOV2],RF.Duration,ADC.BW, ...
+            GradOn,slice,gammaBar,scannerLimits,startTime,'GRE_EPI'};
+        if nargout == 2
+            timing = cartesianRampedGradients(args{:});
+            varargout = {timing.minTE,timing.minTR};
+            return;
+        end
+        [timing,gradients] = cartesianRampedGradients(args{:});
+        rfStart = timing.rfStart;
+    end
 
     %% Return SeqData
     if nargout == 1
@@ -83,8 +96,8 @@ function varargout = GRE_EPI(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus
         
         %% RF pulse
         varargout{1}.Main.RF.dPhs = 0;
-        varargout{1}.Main.RF.tStep = [startTime,ones(1,RF.Num)/RF.Freq,...
-            TR-startTime-RF.Duration]; % ms; 1kHz = 1ms
+        varargout{1}.Main.RF.tStep = [rfStart,ones(1,RF.Num)/RF.Freq,...
+            TR-rfStart-RF.Duration]; % ms; 1kHz = 1ms
         varargout{1}.Main.RF.value = [0+0i,tempRF_Y.*(1+0i),0+0i];
         
         if dummy>0
@@ -94,14 +107,30 @@ function varargout = GRE_EPI(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus
         end;
         
         %% RF DFreq
-        varargout{1}.Main.DFreq.tStep = [startTime,ones(1,RF.Num)/RF.Freq,...
-            TR-startTime-RF.Duration]; % ms; 1kHz = 1ms
+        varargout{1}.Main.DFreq.tStep = varargout{1}.Main.RF.tStep;
         varargout{1}.Main.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0];
         if dummy>0
             varargout{1}.Dummy.DFreq.tStep = varargout{1}.Dummy.tStep;
             varargout{1}.Dummy.DFreq.value = zeros(1,RF.Num+2);
         end;
-                        
+        varargout{1}.TR = TR;
+        varargout{1}.Main.repeat = 1;
+        varargout{1}.Dummy.repeat = dummy;
+        if ramped
+            for channel = fieldnames(gradients).'
+                axis = channel{1};
+                varargout{1}.Main.(axis) = gradients.(axis);
+                if dummy > 0
+                    varargout{1}.Dummy.(axis) = struct('tStep',varargout{1}.Dummy.tStep, ...
+                        'value',zeros(1,RF.Num+2));
+                end
+            end
+            if dummy > 0
+                varargout{1}.Dummy.ADC.value(1) = -2;
+            end
+            return;
+        end
+
         %% ADC
         epiReadoutLength = (MatSize1+1)*MatSize2-1;
         temp1 = ones(1,epiReadoutLength)/ADC.BW;
@@ -211,10 +240,6 @@ function varargout = GRE_EPI(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus
             varargout{1}.Dummy.Gfe.value = zeros(1,(2+RF.Num));
         end;
         
-        %%
-        varargout{1}.TR = TR; %ms
-        varargout{1}.Main.repeat = 1;
-        varargout{1}.Dummy.repeat = dummy;
     end;
 
     %% Return [minTE, minTR]

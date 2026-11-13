@@ -70,12 +70,25 @@ for k = 1:size(fields,1)
 end
 protocol.hasUnifiedFOV = any(strcmp(lines,'Unified FOV Prescription:'));
 protocol.radialResolutionText = @() optionalValueAfter('Radial Acquisition Resolution(mm):');
+protocol.scannerProfile = @() readScannerProfile();
 protocol.txWeight = @readTxWeight;
 protocol.b1PlusFiles = @() filesBetween('B1p Filename:','E1p Filename:');
 protocol.e1PlusFiles = @() filesBetween('E1p Filename:','# Rx:');
 protocol.b1MinusFiles = @() filesBetween('B1m Filename:','E1m Filename:');
 protocol.e1MinusFiles = @() filesBetween('E1m Filename:','Gx Filename:');
 protocol.noiseLoading = @() readNoiseLoadingProtocol(lines);
+
+    function profile = readScannerProfile()
+        profile = [];
+        name = optionalValueAfter('Scanner Profile:');
+        values = optionalValueAfter('Scanner Gradient Limits:');
+        if ~isempty(name) || ~isempty(values)
+            limits = str2double(strsplit(strtrim(values)));
+            validateattributes(limits,{'numeric'},{'row','numel',3,'real','finite','positive'});
+            assert(~isempty(name) && ~strcmpi(name,'None'),'Invalid saved scanner profile.');
+            profile = struct('name',name,'limits',limits);
+        end
+    end
 
     function value = valueAfter(label)
         index = fieldIndex(label)+1;

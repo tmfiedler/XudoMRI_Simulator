@@ -137,6 +137,7 @@ Regenerate the sequence after changing the Cartesian prescription.
 | `Slice Thick.` | Nominal Cartesian slice thickness in mm, set in the Geometry Editor |
 | `MatSize` | Cartesian FE/PE pixel counts; radial samples per spoke / number of spokes |
 | `Rcvr BW (kHz)` | Receiver bandwidth |
+| `Scanner` | Gradient profile for GRE, SE, GRE_EPI and RAD_3D. `None` uses rectangular gradients. `Generic` uses 22 mT/m and 120 T/m/s per physical axis with 10 µs ramp steps. |
 | `Gradient ON` | Enable Cartesian SS/PE/FE axes; all three logical z/y/x axes are checked and locked for `RAD_3D` |
 | `TE`, `TR` | Echo and repetition times in milliseconds |
 | `#Dummy TRs` | Excitations before recorded acquisition |
@@ -147,6 +148,11 @@ time and the readout duration per Cartesian line or radial spoke. For GRE_EPI,
 the duration is for one line in the echo train. TE and TR show the sequence's
 minimum times for the current settings, with minimum TR evaluated at the
 displayed TE.
+
+With a scanner profile selected, Setup bounds the receiver bandwidth and
+slice-selective RF duration and updates the minimum TE and TR. Edit
+`config/scanner.yaml` to add profiles, then reopen Setup. Saved protocols
+retain the limits used to generate their waveforms.
 
 The RF point count sets how finely each pulse is sampled. Start with the
 512-point default; higher counts increase computation. Check that results are
@@ -210,6 +216,11 @@ bandwidth.
 
 All generators use idealized gradients without enforcing scanner amplitude or
 slew-rate limits. Setup raises TE/TR requests below the sequence minimums.
+For GRE, SE and GRE_EPI, **Plot Seq.** shows a 2D k-space preview alongside
+the waveform. Dots mark the ADC samples, and lines show the nominal in-plane
+gradient path, including ramps, prephasers and EPI blips. The path breaks
+where the sequence resets the tracked trajectory.
+
 Use **Plot Seq.** to inspect the generated RF, gradients and acquisition windows;
 large radial studies show a representative spoke subset. See
 [scientific methods](SCIENTIFIC_METHODS.md) for numerical conventions and
@@ -343,7 +354,7 @@ reco
 | **Sagittal / Coronal / Axial Slice** | Move through the volume; the number beside each slider is the voxel index. Cartesian data contains one image plane. |
 | **Export View** | Choose Axial, Sagittal, Coronal or K-Space. |
 | **Export View Port** | Open the chosen pane in a separate MATLAB figure for saving. |
-| **View Trajectory** | Show the exported k-space sample positions and plot their radii by sample index for up to 64 radial spokes. |
+| **View Trajectory** | Show sample positions from the run's `.ktrj`. Cartesian dots are connected in acquisition order within each readout. The radial view also plots sample radii for up to 64 spokes. |
 | **SNR Map** | For radial data, use the loaded noise and a second independent noise set to estimate SNR. **Noise Scale** must be greater than zero. |
 | **Log** | Show diagnostic messages in the MATLAB Command Window. |
 

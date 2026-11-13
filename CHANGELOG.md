@@ -18,6 +18,25 @@ when their stored contract changes.
 
 ### Features
 
+- Scanner profiles support RAD_3D with per-axis limits, ramp compensation
+  before ADC and balanced rewinders after each spoke.
+
+- Scanner profiles support GRE_EPI with slew-limited readout reversals and
+  phase blips between flat-top readouts.
+
+- Scanner profiles also support spin echo, with ramped slice compensation
+  around refocusing and balanced readout and phase-encode rewinders.
+
+- The reconstruction viewer plots saved Cartesian trajectory samples and
+  connects consecutive samples within each readout.
+
+- Plot Seq. displays the nominal in-plane k-space path and individual ADC
+  samples for GRE, SE and GRE_EPI, including the path through GRE gradient ramps.
+
+- Setup supports named scanner gradient profiles for GRE. The Generic profile
+  uses 22 mT/m and 120 T/m/s per axis with 10 µs ramp steps. Protocols save the
+  limits used for generation. Selecting None uses the existing rectangular GRE.
+
 - The three Setup geometry previews support independent zoom and pan and keep
   their views when slices change. Scroll and drag are handled by the Setup
   window on classic MATLAB figures. Panning stays within the image bounds.

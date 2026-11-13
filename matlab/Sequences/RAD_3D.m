@@ -4,7 +4,7 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
+function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus,scannerLimits)
 
     if ~isscalar(GradOn.fe) || ~isscalar(GradOn.pe) || ~isscalar(GradOn.ss) || ...
             GradOn.fe ~= 1 || GradOn.pe ~= 1 || GradOn.ss ~= 1
@@ -45,7 +45,17 @@ function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
     % FE/PE/SS are the logical x/y/z radial axes and must all be enabled.
     % The GUI shows one isotropic FOV and stores it in the legacy two-entry
     % vector. max(...) preserves compatibility with older protocol files.
-    if isfield(ADC,'radialResolutionMm') && ~isempty(ADC.radialResolutionMm)
+    ramped = nargin >= 11 && ~isempty(scannerLimits);
+    if ramped
+        validateattributes(scannerLimits,{'numeric'},{'row','numel',3,'real','finite','positive'});
+        validateattributes(ADC.BW,{'numeric'},{'scalar','real','finite','positive'});
+        [kEdge,spokeDirs,maxComponent] = radialReadoutGeometry([MatSize1 MatSize2],[FOV1 FOV2],ADC);
+        maxBW = radialGradientBounds(MatSize1,kEdge,maxComponent,gammaHz,scannerLimits(1));
+        if ADC.BW > maxBW
+            error('Sequence:GradientLimit','Maximum radial ADC bandwidth is %.6g kHz for these spokes.',maxBW);
+        end
+        spokeAmp = scannerLimits(1)/maxComponent*(ADC.BW/maxBW);
+    elseif isfield(ADC,'radialResolutionMm') && ~isempty(ADC.radialResolutionMm)
         validateattributes(ADC.radialResolutionMm,{'numeric'},{'scalar','real','finite','positive'});
         kEdge = 500 / ADC.radialResolutionMm; % cycles/m
         spokeAmp = 1000 * kEdge / (gammaHz * (ADC.duration / 1000)); % mT/m
@@ -63,15 +73,35 @@ function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
     % readout area here pushes the next spoke off-center in the .ktrj file.
     Gread.rewind.duration = ADC.duration/5;
     Gread.rewind.scale = -ADC.duration / Gread.rewind.duration;
+    Gread.before.steps = [];
+    Gread.before.values = [];
+    Gread.after.steps = Gread.rewind.duration;
+    Gread.after.values = Gread.amp*Gread.rewind.scale;
+    if ramped
+        maxGradient = scannerLimits(1)/maxComponent;
+        slew = scannerLimits(2)/maxComponent;
+        raster = scannerLimits(3)/1000;
+        ticks = ceil(spokeAmp/(slew*raster));
+        rise = ticks*raster;
+        % The prephaser puts k=0 at ADC onset. The rewinder cancels the
+        % entire sampled plateau and the area of the falling ramp.
+        [~,preSteps,preValues] = gradientAreaLobe(-spokeAmp*rise/2,maxGradient,slew,raster);
+        [~,postSteps,postValues] = gradientAreaLobe(-spokeAmp*(ADC.duration+rise/2),maxGradient,slew,raster);
+        rampSteps = repmat(raster,1,ticks);
+        up = spokeAmp*((1:ticks)-0.5)/ticks;
+        Gread.before.steps = [preSteps,rampSteps];
+        Gread.before.values = [preValues,up];
+        Gread.after.steps = [rampSteps,postSteps];
+        Gread.after.values = [fliplr(up),postValues];
+    end
 
-    % For a center-out half-spoke, TE is referenced to the first acquired
-    % sample rather than the midpoint of the readout.
-    minTE = RF.Duration/2;
+    % TE is measured from RF center to ADC onset.
+    minTE = RF.Duration/2+sum(Gread.before.steps);
     if TE < minTE
         TE = minTE;
     end
 
-    minTR = startTime + RF.Duration + (TE - minTE) + ADC.duration + Gread.rewind.duration;
+    minTR = startTime + RF.Duration/2 + TE + ADC.duration + sum(Gread.after.steps);
     if TR < minTR
         TR = minTR;
     end
@@ -88,7 +118,9 @@ function varargout = RAD_3D(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
         % left out so RF amplitude purly depends on input ampltiude not FA
         %tempRF_Y = tempRF_Y .* RF.factor(1);
 
-        spokeDirs = spokeDirections(MatSize2);
+        if ~ramped
+            [~,spokeDirs] = radialReadoutGeometry([MatSize1 MatSize2],[FOV1 FOV2],ADC);
+        end
         mainBlock = buildSpokeSeries(spokeDirs,1,tempRF_Y,...
             startTime,RF,ADC,Gread,readDelay,tailDelay);
 
@@ -197,15 +229,6 @@ function env = makeRFEnvelope(RF,frqBW)
     end
 end
 
-function dirs = spokeDirections(numSpokes)
-    goldenAngle = pi * (3 - sqrt(5));
-    spokeIdx = (1:numSpokes)';
-    z = -1 + 2*(spokeIdx - 0.5) / numSpokes;
-    r = sqrt(max(0,1 - z.^2));
-    phi = (spokeIdx - 1) * goldenAngle;
-    dirs = [r .* cos(phi), r .* sin(phi), z];
-end
-
 function block = buildSpokeSeries(spokeDirs,acquire,tempRF_Y,...
     startTime,RF,ADC,Gread,readDelay,tailDelay)
 
@@ -253,9 +276,10 @@ function block = buildSpokeBlock(dirVec,acquire,tempRF_Y,...
         adcRead = zeros(1,numSamples);
     end
 
-    gRewind = gRead * Gread.rewind.scale;
-    numEntries = 1 + RF.Num + (readDelay > 0) + numSamples + ...
-        (Gread.rewind.duration > 0) + (tailDelay > 0);
+    beforeCount = numel(Gread.before.steps);
+    afterCount = numel(Gread.after.steps);
+    numEntries = 1 + RF.Num + (readDelay > 0) + beforeCount + numSamples + ...
+        afterCount + (tailDelay > 0);
 
     block.tStep = zeros(1,numEntries);
     block.RF = zeros(1,numEntries) + 0i;
@@ -280,6 +304,13 @@ function block = buildSpokeBlock(dirVec,acquire,tempRF_Y,...
         idx = idx + 1;
     end
 
+    beforeIdx = idx:(idx+beforeCount-1);
+    block.tStep(beforeIdx) = Gread.before.steps;
+    block.Gfe(beforeIdx) = Gread.before.values*dirVec(1);
+    block.Gpe(beforeIdx) = Gread.before.values*dirVec(2);
+    block.Gss(beforeIdx) = Gread.before.values*dirVec(3);
+    idx = idx+beforeCount;
+
     adcIdx = idx:(idx + numSamples - 1);
     block.tStep(adcIdx) = dwell;
     block.ADC(adcIdx) = adcRead;
@@ -288,13 +319,12 @@ function block = buildSpokeBlock(dirVec,acquire,tempRF_Y,...
     block.Gss(adcIdx) = gRead(3);
     idx = adcIdx(end) + 1;
 
-    if Gread.rewind.duration > 0
-        block.tStep(idx) = Gread.rewind.duration;
-        block.Gfe(idx) = gRewind(1);
-        block.Gpe(idx) = gRewind(2);
-        block.Gss(idx) = gRewind(3);
-        idx = idx + 1;
-    end
+    afterIdx = idx:(idx+afterCount-1);
+    block.tStep(afterIdx) = Gread.after.steps;
+    block.Gfe(afterIdx) = Gread.after.values*dirVec(1);
+    block.Gpe(afterIdx) = Gread.after.values*dirVec(2);
+    block.Gss(afterIdx) = Gread.after.values*dirVec(3);
+    idx = idx+afterCount;
 
     if tailDelay > 0
         block.tStep(idx) = tailDelay;

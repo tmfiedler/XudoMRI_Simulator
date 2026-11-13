@@ -346,7 +346,7 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
         end
 
         if ~radial
-            loadCartesianReconstruction(hFig,state,protocol,signalData,dataPath,selectedFiles);
+            loadCartesianReconstruction(hFig,protocol,signalData,dataPath,selectedFiles);
             return;
         end
 
@@ -394,7 +394,7 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
     end
 end
 
-function loadCartesianReconstruction(hFig,state,protocol,signalData,dataPath,selectedFiles)
+function loadCartesianReconstruction(hFig,protocol,signalData,dataPath,selectedFiles)
 
     updateBusyState(hFig,'Reconstructing Cartesian data...');
     [recon,matSize] = reconstructCartesianDataset(signalData,protocol);
@@ -435,7 +435,7 @@ function loadCartesianReconstruction(hFig,state,protocol,signalData,dataPath,sel
     set(state.handles.exportViewPopup,'Enable','on');
     set(state.handles.exportViewButton,'Enable','on');
     set(state.handles.snrMapButton,'Enable','off');
-    set(state.handles.trajectoryButton,'Enable','off');
+    set(state.handles.trajectoryButton,'Enable','on');
     refreshDisplay(hFig);
     setStatus(hFig,'Status: Cartesian reconstruction complete');
 end
@@ -671,12 +671,36 @@ end
 function viewTrajectoryCallback(source,~)
     hFig = ancestor(source,'figure');
     state = guidata(hFig);
-    if ~state.dataLoaded || isempty(state.trajectory)
+    if ~state.dataLoaded
         return;
     end
 
-    plotTrajectoryFigure(state.trajectory,state.reconInfo);
-    setStatus(hFig,'Status: opened trajectory viewer');
+    try
+        if strcmp(state.reconMode,'cartesian')
+            fileName = state.protocol.TrajectoryFile;
+            if ~isfile(fileName)
+                signalFile = fullfile(state.dataPath,state.signalFiles{1});
+                fileName = resolveCompanionTrajectoryFile(signalFile,state.signalFiles);
+            end
+            if ~isfile(fileName)
+                [name,folder] = uigetfile('*.ktrj','OPEN: Trajectory File',state.dataPath);
+                if isequal(name,0)
+                    return;
+                end
+                fileName = fullfile(folder,name);
+            end
+            traj = loadTrajectoryFile(fileName,size(state.signalDataClean,1));
+            plotCartesianTrajectoryFigure(traj,state.cartesianMatSize,state.reconInfo.sliceOrientation);
+        elseif ~isempty(state.trajectory)
+            plotTrajectoryFigure(state.trajectory,state.reconInfo);
+        else
+            return;
+        end
+        setStatus(hFig,'Status: opened trajectory viewer');
+    catch ME
+        logException(ME);
+        errordlg(ME.message,'Trajectory Error','modal');
+    end
 end
 
 function reconMatrixCallback(source,~)
@@ -760,7 +784,7 @@ function applyCurrentReconstruction(hFig,statusMessage)
         set(state.handles.exportViewPopup,'Enable','on');
         set(state.handles.exportViewButton,'Enable','on');
         set(state.handles.snrMapButton,'Enable','off');
-        set(state.handles.trajectoryButton,'Enable','off');
+        set(state.handles.trajectoryButton,'Enable','on');
         refreshDisplay(hFig);
         return;
     end
@@ -1300,6 +1324,33 @@ function recommendedSpokes = estimateRecommendedSpokes(info,radius)
     recommendedSpokes = max(1,round(pi * kSpaceDiameter^2));
 end
 
+function plotCartesianTrajectoryFigure(traj,matSize,orientation)
+    [~,orientationIndex] = ismember(orientation,{'Axial','Sagittal','Coronal'});
+    modelAxes = cartesianAxes(orientationIndex,false);
+    inPlane = sort(modelAxes(1:2));
+    x = reshape(traj(:,inPlane(1)),matSize);
+    y = reshape(traj(:,inPlane(2)),matSize);
+    % A NaN after each readout keeps the plotted lines within that readout.
+    lineX = [x; nan(1,matSize(2))];
+    lineY = [y; nan(1,matSize(2))];
+
+    hFig = figure('Visible','on','MenuBar','none','Name','2D Cartesian Trajectory',...
+        'NumberTitle','off','Position',[100 100 820 700],'Color',[1 1 1],...
+        'Toolbar','figure');
+    movegui(hFig,'center');
+    hAxes = axes('Parent',hFig);
+    plot(hAxes,lineX(:),lineY(:),'-','Color',[.55 .60 .67]);
+    hold(hAxes,'on');
+    plot(hAxes,x(:),y(:),'.','Color',[0 .32 .68]);
+    hold(hAxes,'off');
+    grid(hAxes,'on');
+    axis(hAxes,'equal');
+    axisNames = 'xyz';
+    xlabel(hAxes,sprintf('k_%c (cycles/m)',axisNames(inPlane(1))));
+    ylabel(hAxes,sprintf('k_%c (cycles/m)',axisNames(inPlane(2))));
+    title(hAxes,sprintf('Loaded .ktrj (%d samples, %d readouts)',numel(x),matSize(2)));
+end
+
 function plotTrajectoryFigure(traj,info)
     hFig = figure('Visible','on','MenuBar','none','Name','3D Radial Trajectory',...
         'NumberTitle','off','Position',[100 100 1180 860],'Color',[1 1 1],...
@@ -1551,15 +1602,18 @@ function trajFlat = loadTrajectoryFile(fileName,totalSamples)
     if fid == -1
         error(['Unable to open trajectory file: ',fileName]);
     end
-    raw = fread(fid,[3,Inf],'float32');
+    raw = fread(fid,3*totalSamples,'float32');
+    extraByte = fread(fid,1,'uint8');
     fclose(fid);
 
-    trajFlat = raw.';
-    logRadialReco('Read trajectory file: %s raw=%s trajFlat=%s expectedSamples=%d',...
-        fileName,reconstructionSizeString(raw),reconstructionSizeString(trajFlat),totalSamples);
-    if size(trajFlat,1) ~= totalSamples
+    if numel(raw) ~= 3*totalSamples || ~isempty(extraByte)
         error('Trajectory sample count does not match the selected .ksig data.');
     end
+    if any(~isfinite(raw))
+        error('Trajectory file contains nonfinite coordinates.');
+    end
+    trajFlat = reshape(raw,3,[]).';
+    logRadialReco('Read trajectory file: %s trajFlat=%s',fileName,reconstructionSizeString(trajFlat));
 end
 
 function protocol = parseRadialProtocolFile(protFileName)

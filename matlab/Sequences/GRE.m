@@ -4,7 +4,7 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function varargout = GRE(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus)
+function varargout = GRE(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus,scannerLimits)
     
 idealDephasing = 1;
 
@@ -26,7 +26,7 @@ idealDephasing = 1;
     if nargin < 10 || isempty(nucleus)
         nucleus = getDefaultNucleus();
     end
-    gamma = getNucleusGamma(nucleus);
+    [gamma,gammaHz] = getNucleusGamma(nucleus);
     GMax = 22; %mT/m
     
     ADC.duration = MatSize1/ADC.BW; %ms
@@ -40,6 +40,19 @@ idealDephasing = 1;
         frqOffset = 0;
     end
     RF.Freq = RF.Num / RF.Duration; % kHz
+    rfStart = startTime;
+    ramped = nargin >= 11 && ~isempty(scannerLimits);
+    if ramped
+        args = {TE,TR,[MatSize1,MatSize2],[FOV1,FOV2],RF.Duration,ADC.BW, ...
+            GradOn,slice,gammaHz,scannerLimits,startTime,'GRE'};
+        if nargout == 2
+            timing = cartesianRampedGradients(args{:});
+            varargout = {timing.minTE,timing.minTR};
+            return;
+        end
+        [timing,gradients] = cartesianRampedGradients(args{:});
+        rfStart = timing.rfStart;
+    end
     
     %% Return SeqData
     if nargout == 1
@@ -92,8 +105,8 @@ idealDephasing = 1;
         
         %% RF pulse
         varargout{1}.Main.RF.dPhs = 0;
-        varargout{1}.Main.RF.tStep = [startTime,ones(1,RF.Num)/RF.Freq,...
-            TR-startTime-RF.Duration]; % ms; 1kHz = 1ms
+        varargout{1}.Main.RF.tStep = [rfStart,ones(1,RF.Num)/RF.Freq,...
+            TR-rfStart-RF.Duration]; % ms; 1kHz = 1ms
         varargout{1}.Main.RF.value = [0+0i,tempRF_Y.*(1+0i),0+0i];
         
         if dummy>0
@@ -103,8 +116,7 @@ idealDephasing = 1;
         end;
         
         %% RF DFreq
-        varargout{1}.Main.DFreq.tStep = [startTime,ones(1,RF.Num)/RF.Freq,...
-            TR-startTime-RF.Duration]; % ms; 1kHz = 1ms
+        varargout{1}.Main.DFreq.tStep = varargout{1}.Main.RF.tStep;
         varargout{1}.Main.DFreq.value = [0,ones(1,RF.Num)*frqOffset,0];
         if dummy>0
             varargout{1}.Dummy.DFreq.tStep = varargout{1}.Dummy.tStep;
@@ -112,8 +124,8 @@ idealDephasing = 1;
         end;
         
         %% ADC
-        varargout{1}.Main.ADC.tStep = [startTime,TE+RF.Duration/2-ADC.duration/2,...
-            ones(1,MatSize1)/ADC.BW,TR-TE-RF.Duration/2-startTime-ADC.duration/2]; % ms
+        varargout{1}.Main.ADC.tStep = [startTime,TE+RF.Duration/2-ADC.duration/2+(rfStart-startTime),...
+            ones(1,MatSize1)/ADC.BW,TR-TE-RF.Duration/2-rfStart-ADC.duration/2]; % ms
 
         if (idealDephasing == 1)
            % Ideal Spoiling
@@ -127,6 +139,22 @@ idealDephasing = 1;
             varargout{1}.Dummy.ADC.tStep = varargout{1}.Dummy.tStep;
             varargout{1}.Dummy.ADC.value = [-1,zeros(1,RF.Num+1)];
         end;
+
+        varargout{1}.TR = TR;
+        varargout{1}.Main.repeat = MatSize2;
+        varargout{1}.Dummy.repeat = dummy;
+
+        if ramped
+            for channel = fieldnames(gradients).'
+                axis = channel{1};
+                varargout{1}.Main.(axis) = gradients.(axis);
+                if dummy > 0
+                    varargout{1}.Dummy.(axis) = struct('tStep',varargout{1}.Dummy.tStep, ...
+                        'value',zeros(1,RF.Num+2));
+                end
+            end
+            return;
+        end
 
         %% Slice Selection gradient
         if GradOn.ss == 1
@@ -202,10 +230,6 @@ idealDephasing = 1;
             varargout{1}.Dummy.Gfe.value = zeros(1,(2+RF.Num));
         end;
         
-        %%
-        varargout{1}.TR = TR; %ms
-        varargout{1}.Main.repeat = MatSize2;
-        varargout{1}.Dummy.repeat = dummy;
     end;
 
     %% Return [minTE, minTR]

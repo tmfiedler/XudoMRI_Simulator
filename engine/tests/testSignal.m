@@ -135,6 +135,144 @@ for name = {'1H','23Na'}
             max(abs(smokeSignals{1}))<=signalTolerance,'GRE CPU/CUDA disagreement.');
     end
 
+    % Scanner-limited GRE. Independent Cartesian sample coordinates in cycles/m.
+    limits = [22 120 10]; % mT/m, T/m/s, us
+    adc = struct('BW',12);
+    encoding = struct('ss',0,'pe',1,'fe',1);
+    slice = [];
+    [te,tr] = GRE(0,0,[8 8],[64 64],rf,adc,encoding,0,slice,nucleus,limits);
+    inter = GRE(te,tr,[8 8],[64 64],rf,adc,encoding,0,slice,nucleus,limits);
+    seq = combineSeqRect(inter,1,{'P--A'},0);
+    writeGenerated(fullfile(folder,'sequence.seqn'),seq);
+    [fe,pe] = ndgrid((-3.5:3.5)/.064);
+    expectedK = [fe(:).';pe(:).';zeros(1,numel(fe))];
+    [previewPath,previewSamples] = cartesianTrajectoryPreview(seq.Main,{'Gx','Gy'},gamma);
+    assert(max(abs(previewSamples.'-expectedK(1:2,:)),[],'all') < 1e-6, ...
+        'Ramped GRE preview sample positions differ from the Cartesian reference.');
+    assert(any(isnan(previewPath(:,1))) && min(previewPath(:,1),[],'omitnan') < min(fe(:)), ...
+        'Ramped GRE preview must show the prephaser and break at trajectory resets.');
+    for b = 1:numel(backends)
+        [s,actualK] = simulate(repo,folder,backends{b},'RampedGRE',nucleus);
+        % Allow accumulated float32 rounding across the stepped ramps.
+        kError = max(abs(double(actualK)-expectedK),[],'all');
+        assert(kError < 5e-4,'Ramped GRE trajectory error %.6g cycles/m.',kError);
+        [image,matrix] = reconstructCartesianDataset(s(:),protocol);
+        assert(isequal(matrix,[8 8]) && all(isfinite(image.volumeRSS),'all') && ...
+            max(image.volumeRSS(:)) > 0,'Ramped GRE reconstruction failed.');
+        fprintf('PASS %-4s %-3s ramped GRE k %.3g cycles/m (limit 0.0005) / reconstruction\n', ...
+            nucleus,backends{b},kError);
+    end
+
+    % Slice gradient area after RF center must cancel the rephasing lobe.
+    rfSelective = rf;
+    rfSelective.Duration = 5;
+    encoding.ss = 1;
+    slice = struct('TH',.018,'offset',0);
+    [te,tr] = GRE(0,0,[8 8],[64 64],rfSelective,adc,encoding,1,slice,nucleus,limits);
+    inter = GRE(te,tr,[8 8],[64 64],rfSelective,adc,encoding,1,slice,nucleus,limits);
+    ss = inter.Main.Gss;
+    edges = [0,cumsum(ss.tStep)];
+    rfCenter = inter.Main.RF.tStep(1)+rfSelective.Duration/2;
+    postRF = max(0,edges(2:end)-max(edges(1:end-1),rfCenter));
+    assert(abs(sum(ss.value.*postRF)) < 1e-10,'Ramped GRE slice did not refocus.');
+    for gradient = {inter.Main.Gfe,inter.Main.Gpe,ss}
+        g = gradient{1};
+        centers = cumsum(g.tStep)-g.tStep/2;
+        assert(max(abs(g.value)) <= limits(1)+1e-10,'GRE exceeded gradient amplitude.');
+        assert(max(abs(diff(g.value)./diff(centers))) <= limits(2)+1e-8,'GRE exceeded ramp slew.');
+    end
+    combineSeqRect(inter,1,{'P--A'},1);
+
+    % Ramped SE at its minimum timing. Each side of the refocusing center
+    % must balance the slice moment independently.
+    [te,tr] = SE(0,0,[8 8],[64 64],rfSelective,adc,encoding,1,slice,nucleus,limits);
+    inter = SE(0,0,[8 8],[64 64],rfSelective,adc,encoding,1,slice,nucleus,limits);
+    rfStarts = [inter.Main.RF.tStep(1),sum(inter.Main.RF.tStep(1:rf.Num+2))];
+    rfCenters = rfStarts+rfSelective.Duration/2;
+    adcCenter = sum(inter.Main.ADC.tStep(1:2))+4/adc.BW;
+    assert(abs(diff(rfCenters)-te/2)<1e-10 && ...
+        abs(adcCenter-rfCenters(2)-te/2)<1e-10 && abs(inter.TR-tr)<1e-10, ...
+        'Ramped SE echo or repetition timing is incorrect.');
+    ss = inter.Main.Gss;
+    edges = [0,cumsum(ss.tStep)];
+    limitsAtEcho = [rfCenters,adcCenter];
+    for interval = 1:2
+        overlap = max(0,min(edges(2:end),limitsAtEcho(interval+1))- ...
+            max(edges(1:end-1),limitsAtEcho(interval)));
+        assert(abs(sum(ss.value.*overlap))<1e-10,'Ramped SE slice moment is unbalanced.');
+    end
+    for gradient = {inter.Main.Gfe,inter.Main.Gpe,ss}
+        g = gradient{1};
+        centers = cumsum(g.tStep)-g.tStep/2;
+        assert(max(abs(g.value))<=limits(1)+1e-10 && ...
+            max(abs(diff(g.value)./diff(centers)))<=limits(2)+1e-8, ...
+            'Ramped SE exceeded amplitude or slew limits.');
+    end
+    assert(abs(sum(inter.Main.Gfe.value.*inter.Main.Gfe.tStep))<1e-10 && ...
+        abs(sum(inter.Main.Gpe.value.*inter.Main.Gpe.tStep))<1e-10 && ...
+        abs(sum(inter.Main.Gpe.increment.*inter.Main.Gpe.tStep))<1e-10, ...
+        'Ramped SE FE or PE rewinder did not balance its axis.');
+    combineSeqRect(inter,1,{'P--A'},1);
+
+    encoding.ss = 0;
+    inter = SE(0,0,[8 8],[64 64],rf,adc,encoding,0,[],nucleus,limits);
+    seq = combineSeqRect(inter,1,{'P--A'},0);
+    writeGenerated(fullfile(folder,'sequence.seqn'),seq);
+    seProtocol = protocol;
+    seProtocol.SequenceType = 'SE';
+    for b = 1:numel(backends)
+        [s,actualK] = simulate(repo,folder,backends{b},'RampedSE',nucleus);
+        kError = max(abs(double(actualK)-expectedK),[],'all');
+        assert(kError<5e-4,'Ramped SE trajectory error %.6g cycles/m.',kError);
+        [image,matrix] = reconstructCartesianDataset(s(:),seProtocol);
+        assert(isequal(matrix,[8 8]) && all(isfinite(image.volumeRSS),'all') && ...
+            max(image.volumeRSS(:))>0,'Ramped SE reconstruction failed.');
+        fprintf('PASS %-4s %-3s ramped SE k %.3g cycles/m (limit 0.0005) / reconstruction\n', ...
+            nucleus,backends{b},kError);
+    end
+
+    % EPI has one acquisition per line in alternating directions. Exercise
+    % even and odd trains and the single-line case at minimum TE/TR.
+    epiProtocol = protocol;
+    epiProtocol.SequenceType = 'GRE_EPI';
+    for lines = [1 7 8]
+        matrixSize = [8 lines];
+        epiProtocol.MatSize = matrixSize;
+        [te,tr] = GRE_EPI(0,0,matrixSize,[64 64],rf,adc,encoding,0,[],nucleus,limits);
+        inter = GRE_EPI(te,tr,matrixSize,[64 64],rf,adc,encoding,0,[],nucleus,limits);
+        step = inter.Main.ADC.tStep;
+        sample = inter.Main.ADC.value==1;
+        centers = cumsum(step)-step/2;
+        adcCenters = reshape(centers(sample),8,lines);
+        rfCenter = inter.Main.RF.tStep(1)+rf.Duration/2;
+        assert(abs(mean(adcCenters(:))-rfCenter-te)<1e-10,'EPI train center changed.');
+        readAmplitude = 12e9/(gamma*64);
+        raster = limits(3)/1000;
+        rise = ceil(readAmplitude/(limits(2)*raster))*raster;
+        % One PE step is triangular for these inputs. Its raster-rounded
+        % duration can exceed the readout reversal, depending on nucleus.
+        blipDuration = 2*raster*ceil(sqrt(1e9/(gamma*64*limits(2)))/raster);
+        assert(all(abs(diff(adcCenters(1,:))-8/12-max(2*rise,blipDuration))<1e-10), ...
+            'EPI echo spacing does not account for the FE reversal and PE blip.');
+        assert(abs(tr-centers(find(sample,1,'last'))-1/24-rise)<1e-10, ...
+            'EPI TR must include the final ramp.');
+        seq = combineSeqRect(inter,1,{'P--A'},0);
+        writeGenerated(fullfile(folder,'sequence.seqn'),seq);
+        fe = ((-3.5:3.5)'/.064).*(-1).^(0:lines-1);
+        pe = repmat(((0:lines-1)-(lines-1)/2)/.064,8,1);
+        expectedEPI = [fe(:).';pe(:).';zeros(1,8*lines)];
+        for b = 1:numel(backends)
+            [s,actualK] = simulate(repo,folder,backends{b},'RampedEPI',nucleus);
+            kError = max(abs(double(actualK)-expectedEPI),[],'all');
+            assert(kError<5e-4,'Ramped EPI trajectory error %.6g cycles/m.',kError);
+            [image,matrix] = reconstructCartesianDataset(s(:),epiProtocol);
+            assert(isequal(matrix,matrixSize) && all(isfinite(image.volumeRSS),'all') && ...
+                max(image.volumeRSS(:))>0,'Ramped EPI reconstruction failed.');
+            fprintf('PASS %-4s %-3s ramped EPI %d lines k %.3g cycles/m (limit 0.0005)\n', ...
+                nucleus,backends{b},lines,kError);
+        end
+    end
+
     % Uniform radial readout at 5 mm nominal resolution over 400 mm FOV.
     % Increase the sample count at fixed bandwidth and at fixed duration.
     radialCases = [80 16; 256 16; 256 51.2]; % Samples per spoke, bandwidth in kHz.
@@ -164,6 +302,47 @@ for name = {'1H','23Na'}
             fprintf('PASS %-4s %-3s RAD_3D %3d samples/spoke at %g kHz, midpoint error %.3g cycles/m (bound %.3g)\n', ...
                 nucleus,backends{b},radialSamples,bandwidth,kerr,radialTolerance);
         end
+    end
+
+    % Two oblique spokes. A 24 mT/m vector fits the 22 mT/m axis limit
+    % because the largest direction component is sqrt(3)/2.
+    directions = [sqrt(3)/2,0,-.5; ...
+        sqrt(3)/2*cos(pi*(3-sqrt(5))),sqrt(3)/2*sin(pi*(3-sqrt(5))),.5];
+    adc = struct('BW',gamma*24*16/1e8,'radialResolutionMm',5);
+    axesOn = struct('ss',1,'pe',1,'fe',1);
+    [te,tr] = RAD_3D(0,0,[16 2],[400 400],rf,adc,axesOn,0,[],nucleus,limits);
+    inter = RAD_3D(0,0,[16 2],[400 400],rf,adc,axesOn,0,[],nucleus,limits);
+    main = inter.Main;
+    rows = find(main.ADC.value==-1);
+    step = main.ADC.tStep;
+    gradient = [main.Gfe.value;main.Gpe.value;main.Gss.value];
+    assert(abs(inter.TR-2*tr)<1e-10,'Ramped radial TR mismatch.');
+    for spoke = 1:2
+        ends = [rows(2)-1,numel(step)];
+        idx = rows(spoke):ends(spoke);
+        adcFirst = find(main.ADC.value(idx)==1,1);
+        assert(abs(sum(step(idx(1:adcFirst-1)))-step(idx(1))-rf.Duration/2-te)<1e-10, ...
+            'Ramped radial TE must end at ADC onset.');
+        assert(max(abs(sum(gradient(:,idx).*step(idx),2)))<1e-10,'Radial rewind left residual area.');
+        centers = cumsum(step(idx))-step(idx)/2;
+        assert(max(abs(gradient(:,idx)),[],'all')<=limits(1)+1e-10 && ...
+            max(abs(diff(gradient(:,idx),1,2)./diff(centers)),[],'all')<=limits(2)+1e-8, ...
+            'Ramped radial waveform exceeded per-axis limits.');
+    end
+    seq = combineSeqRect(inter,1,{'P--A'},0,true);
+    writeGenerated(fullfile(folder,'sequence.seqn'),seq);
+    radii = ((1:16)-.5)*100/16;
+    expectedRadial = [directions(1,:).'*radii,directions(2,:).'*radii];
+    for b = 1:numel(backends)
+        [s,actualK] = simulate(repo,folder,backends{b},'RampedRAD',nucleus);
+        kError = max(abs(double(actualK)-expectedRadial),[],'all');
+        assert(kError<5e-4,'Ramped RAD_3D trajectory error %.6g cycles/m.',kError);
+        context = buildRadialReconstructionContext(reshape(actualK.',16,2,3),8,[.04 .04 .04]);
+        image = reconstructRadialDataset(reshape(s,16,2),context);
+        assert(all(isfinite(image.volumeRSS),'all') && max(image.volumeRSS(:))>0, ...
+            'Ramped radial reconstruction failed.');
+        fprintf('PASS %-4s %-3s ramped RAD_3D k %.3g cycles/m (limit 0.0005)\n', ...
+            nucleus,backends{b},kError);
     end
 end
 checkRadialReconstruction();
