@@ -18,6 +18,10 @@ when their stored contract changes.
 
 ### Features
 
+- Enlarged Setup and its square geometry previews, reorganized Imaging Setup
+  into five rows, and grouped action buttons below it. Refined Study and
+  Geometry Editor spacing and aligned the larger header logos with the headings.
+
 - Scanner profiles support RAD_3D with per-axis limits, ramp compensation
   before ADC and balanced rewinders after each spoke.
 
