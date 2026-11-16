@@ -331,14 +331,13 @@ Run:
 reco
 ```
 
-1. Set **# Rx** to the number of receive channels. Click **Load K-space Data**
-   and select one `.ksig` file per channel from the completed run folder. For
-   multiple receivers, select all channel files together; numbered files are
-   sorted by channel number.
+1. Click **Load Signal (.ksig)** and select the `.ksig` files for the receive
+   channels you want to reconstruct from one run. Reco counts the selected
+   files and sorts numbered files by channel number.
 2. Keep the matching `.prot` beside the signal files; radial data and shifted
    Cartesian image centers also need the matching `.ktrj`. The viewer finds
    these files automatically or asks you to select them.
-3. Start with **RSS Magnitude**, then use **Display** and the slice sliders
+3. Start with **RSS Mag.**, then use **Display** and the slice sliders
    to inspect the image.
 4. To add simulated noise, click **Load Noise (.nois)** and select one file per
    receiver from a single noise set, in matching channel order. Its sample
@@ -346,27 +345,33 @@ reco
 
 | Control | Meaning |
 | --- | --- |
-| **# Rx** | Number of receive-channel files to load. |
-| **Load K-space Data** | Load signal files and reconstruct the image. |
+| **Load Signal (.ksig)** | Load signal files and reconstruct the image. |
 | **Display** | Choose how receiver images are combined and shown; see below. |
 | **Load Noise (.nois)** | Add a simulated noise realization to the loaded signal. |
 | **Noise Scale** | Noise amplitude multiplier: `0` shows the clean signal, `1` uses the stored noise amplitude; larger values add more noise. Loading noise sets it to `1`. |
-| **Sagittal / Coronal / Axial Slice** | Move through the volume; the number beside each slider is the voxel index. Cartesian data contains one image plane. |
-| **Export View** | Choose Axial, Sagittal, Coronal or K-Space. |
-| **Export View Port** | Open the chosen pane in a separate MATLAB figure for saving. |
+| **Sagittal / Coronal / Axial Slice** | Move through the 3D image volume; the number beside each slider is the voxel index. |
+| **↻** | Rotate the corresponding image view 90° clockwise. |
+| **Export View** | Choose an image pane or an available k-space pane. |
+| **Export Pane** | Open the chosen pane in a separate MATLAB figure for saving. |
 | **View Trajectory** | Show sample positions from the run's `.ktrj`. Cartesian dots are connected in acquisition order within each readout. The radial view also plots sample radii for up to 64 spokes. |
 | **SNR Map** | For radial data, use the loaded noise and a second independent noise set to estimate SNR. **Noise Scale** must be greater than zero. |
-| **Log** | Show diagnostic messages in the MATLAB Command Window. |
+| **Global Scale** | Use one display range across the reconstructed volume. Magnitude views use zero to the volume maximum. |
 
-**Display** offers **RSS Magnitude** (root-sum-of-squares of receiver magnitudes),
-**Sum Magnitude** (sum of receiver magnitudes), and **Coherent Magnitude**,
-**Coherent Phase**, **Coherent Real** or **Coherent Imag** (views of the complex
+**Display** offers **RSS Mag.** (root-sum-of-squares of receiver magnitudes),
+**Sum Mag.** (sum of receiver magnitudes), and **Coh. Mag.**,
+**Coh. Phase**, **Coh. Real** or **Coh. Imag.** (views of the complex
 receiver sum; phase is in radians). Coherent sums can cancel when receiver phases differ.
 
 The information panel reports the loaded sequence, FOV, matrix, receivers and
-files. For radial data it also shows samples/spokes and a rough spoke-density
-estimate. **Status** reports progress or errors; the **K-Space** pane shows
-k-space magnitude on a logarithmic display rather than the reconstructed image.
+files. Scroll down to see more saved sequence settings. For radial data it also
+shows samples/spokes and a rough spoke-density estimate.
+When the window is short, use the scrollbar at the right of the Controls panel
+to reach controls below the visible area.
+
+K-space appears below the reconstructed image. For 3D radial data, the views
+run left to right in sagittal, coronal and axial order, matching the sliders.
+The sliders move the image slices while the three central k-space sections
+stay fixed.
 
 For **SNR Map**, first load one noise set, then select a different independent
 set when prompted (for example, `noiseSet2/` after loading `noiseSet1/`). In the

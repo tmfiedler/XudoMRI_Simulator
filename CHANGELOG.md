@@ -18,6 +18,12 @@ when their stored contract changes.
 
 ### Features
 
+- Reco has a resizable viewer with scrollable controls and protocol details.
+  It infers receive channels from the selected signal files.
+- Reco pairs the 2D Cartesian image with its acquired k-space plane and the
+  three 3D radial views with central k-space sections. Image views support
+  rotation, a shared volume-wide display scale and pane export.
+
 - Enlarged Setup and its square geometry previews, reorganized Imaging Setup
   into five rows, and grouped action buttons below it. Refined Study and
   Geometry Editor spacing and aligned the larger header logos with the headings.
@@ -31,8 +37,8 @@ when their stored contract changes.
 - Scanner profiles also support spin echo, with ramped slice compensation
   around refocusing and balanced readout and phase-encode rewinders.
 
-- The reconstruction viewer plots saved Cartesian trajectory samples and
-  connects consecutive samples within each readout.
+- Reco displays saved Cartesian readout trajectories and individual samples
+  in the radial trajectory plots.
 
 - Plot Seq. displays the nominal in-plane k-space path and individual ADC
   samples for GRE, SE and GRE_EPI, including the path through GRE gradient ramps.
@@ -48,9 +54,6 @@ when their stored contract changes.
   spoke. The reconstruction viewer uses the saved resolution for its default
   matrix and supports an override for radial data. Deapodization operates on
   the output volume after extracting it from the internal FFT grid.
-- The radial trajectory viewer marks the individual samples in its 3D and
-  radius plots. The reconstruction viewer pairs the Rx and display controls
-  with their labels and gives the lower controls more vertical space.
 - Setup tooltips show the selected nucleus's Larmor frequency, readout duration
   and dwell time, and sequence timing limits. The B1+ tooltip explains its link
   to flip angle and RF pulse duration. Removed the GPU, Run, and Jobs tooltips.
@@ -60,8 +63,8 @@ when their stored contract changes.
 - Widened the Geometry Editor coordinate and slice-position fields and aligned
   the FOV dropdown with the adjacent inputs. The FOV controls leave more
   clearance beside the axial preview.
-- Removed tooltips from the version badge, noise loading button, radial
-  acquisition resolution field, job details line, and reconstruction Log checkbox.
+- Removed Setup tooltips from the version badge, noise loading button, radial
+  acquisition resolution field and job details line.
 
 
 ## 2026.0

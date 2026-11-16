@@ -45,9 +45,8 @@ In MATLAB, run:
 reco
 ```
 
-Leave **# Rx** at **1**, click **Load K-space Data**, and open `example1.ksig`
-from the completed run folder. Reconstruction starts when the file loads.
-Keep **RSS Magnitude** selected.
+Click **Load Signal (.ksig)** and open `example1.ksig` from the completed run
+folder. Reconstruction starts when the file loads. Keep **RSS Mag.** selected.
 
 Expect three separated blocks with different brightness; edge ringing is
 normal at this small matrix size. This example exercises the workflow, rather

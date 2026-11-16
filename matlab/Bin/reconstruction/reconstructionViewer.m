@@ -39,151 +39,162 @@ function initialSelection = parseInitialSelection(varargin)
     end
 
     initialSelection = struct('SignalFiles',{signalFiles},...
-        'DataPath',char(parser.Results.DataPath),'NumRx',parser.Results.NumRx);
+        'DataPath',char(parser.Results.DataPath));
 end
 
 function hFig = createReconstructionFigure()
 
+    repositoryPath = fileparts(fileparts(fileparts(fileparts(mfilename('fullpath')))));
+    simulatorVersion = readRepositoryVersion(fullfile(repositoryPath,'VERSION'));
     hFig = figure('Name','Reconstruction','NumberTitle','off',...
         'MenuBar','none','Toolbar','figure','Color',[1 1 1],...
-        'Position',[100 100 1400 920]);
+        'Units','pixels','Position',[100 100 1400 920]);
     movegui(hFig,'center');
 
-    hControl = uipanel('Parent',hFig,'Title','Controls','Units','normalized',...
-        'Position',[0.02 0.03 0.25 0.94],'BackgroundColor',[1 1 1]);
+    hControlViewport = uipanel('Parent',hFig,'Units','normalized','BorderType','none',...
+        'Position',[0.004 0.007 0.185 0.986],'BackgroundColor',[1 1 1]);
+    hControl = uipanel('Parent',hControlViewport,'Title','Controls','Units','normalized',...
+        'Position',[0 0 1 1],'BackgroundColor',[1 1 1],...
+        'BorderType','line','HighlightColor',[0.55 0.55 0.55]);
+    hControlScroll = uicontrol(hControlViewport,'Style','slider','Units','pixels',...
+        'Min',0,'Max',1,'Value',1,'Visible','off','TooltipString','Scroll Reco controls');
 
-    uicontrol(hControl,'Style','text','String','# Rx','Units','normalized',...
-        'Position',[0.08 0.94 0.13 0.03],'BackgroundColor',[1 1 1],...
-        'HorizontalAlignment','left');
-    handles.nRxEdit = uicontrol(hControl,'Style','edit','String','1',...
-        'Units','normalized','Position',[0.22 0.93 0.16 0.05],...
-        'BackgroundColor',[1 1 1],'Callback',@nRxCallback);
+    actionHeight = 0.026;
+    loadButtonHeight = 0.032;
+    labelHeight = 0.021;
+    sliderHeight = 0.018;
+    labelInset = (actionHeight-labelHeight)/2;
+    sliderInset = (labelHeight-sliderHeight)/2;
+    displayY = 0.922;
 
     handles.loadButton = uicontrol(hControl,'Style','pushbutton',...
-        'String','Load K-space Data','Units','normalized',...
-        'Position',[0.41 0.93 0.51 0.05],'Callback',@loadDataCallback);
-
-    uicontrol(hControl,'Style','text','String','Display','Units','normalized',...
-        'Position',[0.08 0.872 0.21 0.03],'BackgroundColor',[1 1 1],...
-        'HorizontalAlignment','left');
-    handles.displayPopup = uicontrol(hControl,'Style','popupmenu',...
-        'String',{'RSS Magnitude';'Sum Magnitude';'Coherent Magnitude';...
-                   'Coherent Phase';'Coherent Real';'Coherent Imag'},...
-        'Value',1,'Units','normalized','Position',[0.31 0.862 0.61 0.05],...
-        'BackgroundColor',[1 1 1],'Callback',@displayModeCallback);
+        'String','Load Signal (.ksig)','Units','normalized','FontWeight','bold',...
+        'Position',[0.025 0.958 0.455 loadButtonHeight],'Callback',@loadDataCallback);
 
     handles.loadNoiseButton = uicontrol(hControl,'Style','pushbutton',...
-        'String','Load Noise (.nois)','Units','normalized',...
-        'Position',[0.08 0.79 0.46 0.05],'Enable','off',...
+        'String','Load Noise (.nois)','Units','normalized','FontWeight','bold',...
+        'Position',[0.520 0.958 0.455 loadButtonHeight],'Enable','off',...
         'Callback',@loadNoiseCallback);
 
+    uicontrol(hControl,'Style','text','String','Display','Units','normalized',...
+        'Position',[0.025 displayY+labelInset 0.165 labelHeight],'BackgroundColor',[1 1 1],...
+        'HorizontalAlignment','left','FontSize',8);
+    handles.displayPopup = uicontrol(hControl,'Style','popupmenu',...
+        'String',{'RSS Mag.';'Sum Mag.';'Coh. Mag.';...
+                   'Coh. Phase';'Coh. Real';'Coh. Imag.'},...
+        'Value',1,'Units','normalized','Position',[0.195 displayY 0.40 actionHeight],...
+        'BackgroundColor',[1 1 1],'FontSize',8,'Callback',@displayModeCallback);
+
     uicontrol(hControl,'Style','text','String','Noise Scale','Units','normalized',...
-        'Position',[0.57 0.80 0.22 0.03],'BackgroundColor',[1 1 1],...
-        'HorizontalAlignment','left');
+        'Position',[0.604 displayY+labelInset 0.255 labelHeight],'BackgroundColor',[1 1 1],...
+        'HorizontalAlignment','left','FontSize',8);
     handles.noiseScaleEdit = uicontrol(hControl,'Style','edit','String','0',...
-        'Units','normalized','Position',[0.80 0.79 0.12 0.05],...
+        'Units','normalized','Position',[0.863 displayY 0.112 actionHeight],...
         'BackgroundColor',[1 1 1],'Enable','off',...
         'Callback',@noiseScaleCallback);
 
-    handles.infoText = uicontrol(hControl,'Style','text',...
+    topControls = hControl.Children;
+    handles.infoText = uicontrol(hControl,'Style','listbox',...
         'String',{'No data loaded.'},'Units','normalized',...
-        'Position',[0.08 0.597 0.84 0.177],'BackgroundColor',[1 1 1],...
+        'Position',[0.025 0.29 0.95 0.59],'BackgroundColor',[1 1 1],...
         'HorizontalAlignment','left');
 
-    handles.paramText = uicontrol(hControl,'Style','text',...
-        'String',{'r^2 DCF, Kaiser-Bessel width 4, 2x oversampling'},...
-        'Units','normalized','Position',[0.08 0.56 0.84 0.026],...
-        'BackgroundColor',[1 1 1],'HorizontalAlignment','left');
-
-    handles.statusText = uicontrol(hControl,'Style','text',...
-        'String',{'Status: waiting for data'},'Units','normalized',...
-        'Position',[0.08 0.518 0.84 0.032],'BackgroundColor',[1 1 1],...
-        'ForegroundColor',[0.1 0.1 0.1],'HorizontalAlignment','left');
-
-    uicontrol(hControl,'Style','text','String','Sagittal Slice','Units','normalized',...
-        'Position',[0.08 0.474 0.40 0.034],'BackgroundColor',[1 1 1],...
+    sagittalLabel = uicontrol(hControl,'Style','text','String','Sagittal Slice','Units','normalized',...
+        'Position',[0.025 0.257 0.40 labelHeight],'BackgroundColor',[1 1 1],...
         'HorizontalAlignment','left');
     handles.xSlider = uicontrol(hControl,'Style','slider','Units','normalized',...
-        'Position',[0.08 0.428 0.68 0.04],'Min',1,'Max',2,'Value',1,...
-        'SliderStep',[1 1],'Enable','off','Tag','x',...
+        'Position',[0.025 0.235+sliderInset 0.75 sliderHeight],'Min',1,'Max',2,'Value',1,...
+        'SliderStep',[1 1],'Enable','off','Tag','x','UserData',1,...
         'Callback',@sliceSliderCallback);
     handles.xValue = uicontrol(hControl,'Style','text','String','1','Units','normalized',...
-        'Position',[0.80 0.428 0.12 0.04],'BackgroundColor',[1 1 1]);
+        'Position',[0.79 0.235 0.085 labelHeight],'BackgroundColor',[1 1 1],...
+        'HorizontalAlignment','left');
 
     uicontrol(hControl,'Style','text','String','Coronal Slice','Units','normalized',...
-        'Position',[0.08 0.386 0.40 0.034],'BackgroundColor',[1 1 1],...
+        'Position',[0.025 0.203 0.40 labelHeight],'BackgroundColor',[1 1 1],...
         'HorizontalAlignment','left');
     handles.ySlider = uicontrol(hControl,'Style','slider','Units','normalized',...
-        'Position',[0.08 0.340 0.68 0.04],'Min',1,'Max',2,'Value',1,...
-        'SliderStep',[1 1],'Enable','off','Tag','y',...
+        'Position',[0.025 0.181+sliderInset 0.75 sliderHeight],'Min',1,'Max',2,'Value',1,...
+        'SliderStep',[1 1],'Enable','off','Tag','y','UserData',2,...
         'Callback',@sliceSliderCallback);
     handles.yValue = uicontrol(hControl,'Style','text','String','1','Units','normalized',...
-        'Position',[0.80 0.340 0.12 0.04],'BackgroundColor',[1 1 1]);
+        'Position',[0.79 0.181 0.085 labelHeight],'BackgroundColor',[1 1 1],...
+        'HorizontalAlignment','left');
 
     uicontrol(hControl,'Style','text','String','Axial Slice','Units','normalized',...
-        'Position',[0.08 0.298 0.40 0.034],'BackgroundColor',[1 1 1],...
+        'Position',[0.025 0.149 0.40 labelHeight],'BackgroundColor',[1 1 1],...
         'HorizontalAlignment','left');
     handles.zSlider = uicontrol(hControl,'Style','slider','Units','normalized',...
-        'Position',[0.08 0.252 0.68 0.04],'Min',1,'Max',2,'Value',1,...
-        'SliderStep',[1 1],'Enable','off','Tag','z',...
+        'Position',[0.025 0.127+sliderInset 0.75 sliderHeight],'Min',1,'Max',2,'Value',1,...
+        'SliderStep',[1 1],'Enable','off','Tag','z','UserData',3,...
         'Callback',@sliceSliderCallback);
     handles.zValue = uicontrol(hControl,'Style','text','String','1','Units','normalized',...
-        'Position',[0.80 0.252 0.12 0.04],'BackgroundColor',[1 1 1]);
+        'Position',[0.79 0.127 0.085 labelHeight],'BackgroundColor',[1 1 1],...
+        'HorizontalAlignment','left');
+
+    sliceValues = [handles.xValue handles.yValue handles.zValue];
+    for column = 1:3
+        rowY = sliceValues(column).Position(2);
+        handles.rotateButtons(column) = uicontrol(hControl,'Style','pushbutton',...
+            'String',char(8635),'FontName','Segoe UI Symbol','Units','normalized',...
+            'Position',[0.882 rowY-labelInset 0.093 actionHeight],'Enable','off',...
+            'TooltipString','Rotate image 90 degrees clockwise',...
+            'UserData',column,'Callback',@rotateSliceCallback);
+    end
 
     uicontrol(hControl,'Style','text','String','Export View','Units','normalized',...
-        'Position',[0.08 0.206 0.30 0.036],'BackgroundColor',[1 1 1],...
+        'Position',[0.025 0.102 0.33 labelHeight],'BackgroundColor',[1 1 1],...
         'HorizontalAlignment','left');
     handles.exportViewPopup = uicontrol(hControl,'Style','popupmenu',...
-        'String',{'Axial';'Sagittal';'Coronal';'K-Space'},'Value',1,...
-        'Units','normalized','Position',[0.08 0.152 0.48 0.05],...
+        'String',{'Sagittal';'Coronal';'Axial'},'Value',1,...
+        'Units','normalized','Position',[0.025 0.072 0.54 actionHeight],...
         'BackgroundColor',[1 1 1],'Enable','off');
     handles.exportViewButton = uicontrol(hControl,'Style','pushbutton',...
-        'String','Export View Port','Units','normalized',...
-        'Position',[0.60 0.152 0.32 0.05],'Enable','off',...
+        'String','Export Pane','Units','normalized',...
+        'Position',[0.645 0.072 0.33 actionHeight],'Enable','off',...
         'Callback',@exportViewPortCallback);
 
-    actionHeight = 0.05;
-    labelHeight = 0.035;
-    labelInset = (actionHeight-labelHeight)/2;
-    trajectoryY = 0.084;
-    bottomActionY = 0.014;
+    trajectoryY = 0.040;
+    bottomActionY = 0.008;
     handles.trajectoryButton = uicontrol(hControl,'Style','pushbutton',...
         'String','View Trajectory','Units','normalized',...
-        'Position',[0.08 trajectoryY 0.42 actionHeight],'Enable','off',...
+        'Position',[0.025 trajectoryY 0.44 actionHeight],'Enable','off',...
         'Callback',@viewTrajectoryCallback);
 
     uicontrol(hControl,'Style','text','String','Matrix','Units','normalized',...
-        'Position',[0.52 trajectoryY+labelInset 0.18 labelHeight],'BackgroundColor',[1 1 1]);
+        'Position',[0.65 trajectoryY 0.19 labelHeight],'BackgroundColor',[1 1 1]);
     handles.reconMatrixEdit = uicontrol(hControl,'Style','edit',...
-        'Units','normalized','Position',[0.72 trajectoryY 0.20 actionHeight],'BackgroundColor',[1 1 1],...
+        'Units','normalized','Position',[0.855 trajectoryY 0.12 actionHeight],'BackgroundColor',[1 1 1],...
         'Enable','off','Tag','RadialReconstructionMatrix','Callback',@reconMatrixCallback,...
         'TooltipString','Voxels per axis for 3D radial data. Clear to restore the protocol default.');
 
     handles.snrMapButton = uicontrol(hControl,'Style','pushbutton',...
         'String','SNR Map','Units','normalized',...
-        'Position',[0.08 bottomActionY 0.56 actionHeight],'Enable','off',...
+        'Position',[0.025 bottomActionY 0.43 actionHeight],'Enable','off',...
         'TooltipString','Requires a second, different simulated .nois realization.',...
         'Callback',@snrMapCallback);
-    handles.loggingCheckbox = uicontrol(hControl,'Style','checkbox',...
-        'String','Log','Units','normalized',...
-        'Position',[0.69 bottomActionY+labelInset 0.23 labelHeight],...
+    handles.globalScaleCheckbox = uicontrol(hControl,'Style','checkbox',...
+        'String','Global Scale','Units','normalized',...
+        'Position',[0.58 bottomActionY+labelInset 0.395 labelHeight],...
         'BackgroundColor',[1 1 1],...
-        'Value',double(isRadialRecoLoggingEnabled()),...
-        'Callback',@loggingToggleCallback);
+        'Value',0,'Callback',@globalScaleCallback);
 
-    handles.axialAxes = axes('Parent',hFig,'Units','normalized',...
-        'Position',[0.29 0.54 0.29 0.38]);
-    handles.sagittalAxes = axes('Parent',hFig,'Units','normalized',...
-        'Position',[0.63 0.54 0.29 0.38]);
-    handles.coronalAxes = axes('Parent',hFig,'Units','normalized',...
-        'Position',[0.29 0.08 0.29 0.38]);
-    handles.kspaceAxes = axes('Parent',hFig,'Units','normalized',...
-        'Position',[0.63 0.08 0.29 0.38]);
+    hPreview = uipanel('Parent',hFig,'Units','pixels','BorderType','none',...
+        'BackgroundColor',[1 1 1]);
+    handles.sagittalAxes = axes('Parent',hPreview,'Units','normalized',...
+        'Position',[0 0.54 0.30 0.38]);
+    handles.coronalAxes = axes('Parent',hPreview,'Units','normalized',...
+        'Position',[0.35 0.54 0.30 0.38]);
+    handles.axialAxes = axes('Parent',hPreview,'Units','normalized',...
+        'Position',[0.70 0.54 0.30 0.38]);
+    for column = 1:3
+        handles.kspaceAxes(column) = axes('Parent',hPreview,'Units','normalized',...
+            'Position',[(column-1)*0.35 0.08 0.30 0.38],'Visible','off');
+    end
 
-    initializeAxes(handles.axialAxes,'Axial');
-    initializeAxes(handles.sagittalAxes,'Sagittal');
-    initializeAxes(handles.coronalAxes,'Coronal');
-    initializeAxes(handles.kspaceAxes,'K-Space');
+    hVersion = uicontrol(hPreview,'Style','text','String',['v' simulatorVersion],...
+        'Units','pixels','HorizontalAlignment','right','FontUnits','pixels','FontSize',10,...
+        'ForegroundColor',[.4 .4 .4],'BackgroundColor','white','Tag','SimulatorVersion');
 
     handles.busyOverlay = uipanel('Parent',hFig,'Units','normalized',...
         'Position',[0 0 1 1],'BackgroundColor',[0.94 0.94 0.94],...
@@ -199,9 +210,9 @@ function hFig = createReconstructionFigure()
     state.handles = handles;
     state.defaultFigureName = get(hFig,'Name');
     state.busyDepth = 0;
-    state.nRx = 1;
     state.loadedNRx = 1;
     state.displayMode = 1;
+    state.globalImageLimits = [];
     state.dataLoaded = false;
     state.volumeRSS = [];
     state.volumeSOM = [];
@@ -226,11 +237,77 @@ function hFig = createReconstructionFigure()
     state.reconMode = '';
     state.cartesianMatSize = [];
     state.sliceIndex = [1 1 1];
+    state.sliceQuarterTurns = [0 0 0];
     state.resetSliceIndex = false;
-    state.loggingEnabled = isRadialRecoLoggingEnabled();
 
     guidata(hFig,state);
-    refreshDisplay(hFig);
+    configureViewerResize(hFig,hControl,hControlScroll,hPreview,hVersion,topControls,...
+        handles.infoText,sagittalLabel);
+    refreshDisplay(hFig,true);
+end
+
+function configureViewerResize(hFig,hControl,hControlScroll,hPreview,hVersion,topControls,...
+        infoBox,sagittalLabel)
+    viewport = hControl.Parent;
+    set(viewport,'Units','pixels');
+    set(hControl,'Units','pixels');
+    set(hControl.Children,'Units','pixels');
+    controlPosition = viewport.Position;
+    topPositions = vertcat(topControls.Position);
+    spacing = 5;
+    infoPosition = infoBox.Position;
+    infoPosition(2) = sum(sagittalLabel.Position([2 4])) + spacing;
+    infoPosition(4) = min(topPositions(:,2)) - spacing - infoPosition(2);
+    layout = @(~,~) resizeViewer(hFig,hControl,hControlScroll,hPreview,hVersion,...
+        controlPosition,topControls,topPositions,infoBox,infoPosition);
+    set(hFig,'SizeChangedFcn',layout);
+    set(hControlScroll,'Callback',layout);
+    layout(hFig,[]);
+end
+
+function resizeViewer(hFig,hControl,hControlScroll,hPreview,hVersion,controlPosition,...
+        topControls,topPositions,infoBox,infoPosition)
+    position = hFig.Position;
+    width = position(3);
+    height = position(4);
+    inset = controlPosition(2);
+    scrollbarWidth = 16;
+    previewLeft = controlPosition(1) + controlPosition(3) + scrollbarWidth + inset;
+    minWidth = previewLeft + 320 + inset;
+    if width < minWidth
+        position(3) = ceil(minWidth);
+        hFig.Position = position;
+        width = position(3);
+    end
+
+    verticalInset = min(inset,floor((height-1)/2));
+    viewportHeight = height - 2*verticalInset;
+    borderInset = min(2,floor((viewportHeight-1)/2));
+    visibleHeight = viewportHeight - 2*borderInset;
+    minInfoHeight = 88;
+    contentHeight = max(visibleHeight,controlPosition(4) - infoPosition(4) + minInfoHeight);
+    overflow = contentHeight - visibleHeight;
+    controlWidth = controlPosition(3);
+    hControl.Parent.Position = [controlPosition(1) verticalInset ...
+        controlWidth + scrollbarWidth viewportHeight];
+    if overflow > 0
+        step = min(1,24/overflow);
+        page = min(1,viewportHeight/overflow);
+        set(hControlScroll,'Position',[controlWidth+1 1 scrollbarWidth viewportHeight],...
+            'SliderStep',[step max(step,page)],'Visible','on');
+    else
+        set(hControlScroll,'Visible','off','Value',1);
+    end
+    hControl.Position = [1 1+borderInset-overflow*hControlScroll.Value controlWidth contentHeight];
+    heightChange = contentHeight - controlPosition(4);
+    positions = topPositions;
+    positions(:,2) = positions(:,2) + heightChange;
+    set(topControls,{'Position'},num2cell(positions,2));
+    infoPosition(4) = infoPosition(4) + heightChange;
+    infoBox.Position = infoPosition;
+    previewWidth = width - previewLeft - inset;
+    hPreview.Position = [previewLeft 1 previewWidth height];
+    hVersion.Position = [previewWidth-100 3 100 15];
 end
 
 function initializeAxes(hAxes,titleStr)
@@ -241,50 +318,36 @@ end
 
 function loadDataCallback(source,~)
     hFig = ancestor(source,'figure');
-    state = guidata(hFig);
 
     try
-        logRadialReco('Load requested with #Rx = %d',state.nRx);
-        setStatus(hFig,'Status: selecting raw data...');
-        [selectedFiles,dataPath] = selectSignalFiles(state.nRx);
+        [selectedFiles,dataPath] = selectSignalFiles();
         if isempty(selectedFiles)
             logRadialReco('Data selection cancelled');
-            setStatus(hFig,'Status: data selection cancelled');
             return;
         end
         loadSelectedSignalData(hFig,selectedFiles,dataPath);
     catch ME
         logRadialReco('ERROR: %s',ME.message);
         logException(ME);
-        setStatus(hFig,'Status: reconstruction failed');
         errordlg(ME.message,'Reconstruction Error','modal');
     end
 end
 
 function loadSelectedSignalData(hFig,selectedFiles,dataPath)
 
-    state = guidata(hFig);
+    selectedFiles = sortSignalFiles(selectedFiles);
     logRadialReco('Selected data path: %s',dataPath);
     logRadialReco('Selected signal files: %s',strjoin(selectedFiles,', '));
 
-    if ~isempty(selectedFiles)
-        state.nRx = numel(selectedFiles);
-        if isfield(state,'handles') && isfield(state.handles,'nRxEdit') && ishghandle(state.handles.nRxEdit)
-            set(state.handles.nRxEdit,'String',num2str(state.nRx));
-        end
-        guidata(hFig,state);
-    end
-
     try
         dataFileName = fullfile(dataPath,selectedFiles{1});
-        protFileName = resolveCompanionProtocolFileRadial(dataFileName,selectedFiles);
+        protFileName = resolveCompanionFile(dataFileName,selectedFiles,'.prot');
         logRadialReco('Resolved protocol file: %s',protFileName);
 
         if exist(protFileName,'file') ~= 2
             [protName,protPath,protIndex] = uigetfile('*.prot','OPEN: Protocol File',dataPath);
             if isequal(protIndex,0)
                 logRadialReco('Protocol selection cancelled');
-                setStatus(hFig,'Status: protocol selection cancelled');
                 return;
             end
             protFileName = fullfile(protPath,protName);
@@ -293,25 +356,13 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
 
         beginBusyState(hFig,'Loading reconstruction data...');
         loadBusyCleanup = onCleanup(@() endBusyState(hFig)); %#ok<NASGU>
-        setStatus(hFig,'Status: reading protocol...');
         updateBusyState(hFig,'Reading protocol...');
-        protocol = parseRadialProtocolFile(protFileName);
-        protocol.ProtocolFile = protFileName;
+        protocol = readReconstructionProtocol(protFileName);
         logRadialReco('Protocol sequence=%s MatSize=%s FOV=%s NumRx=%d',...
             protocol.SequenceType,mat2str(protocol.MatSize),mat2str(protocol.FOV),protocol.NumRx);
 
-        if state.nRx > protocol.NumRx
+        if numel(selectedFiles) > protocol.NumRx
             error('Selected Rx channel count exceeds the protocol # Rx value.');
-        end
-
-        if numel(selectedFiles) == 1 && protocol.NumRx > 1
-            selectedFiles = discoverNumberedSignalFiles(dataPath,selectedFiles{1},protocol.NumRx);
-            state = guidata(hFig);
-            state.nRx = numel(selectedFiles);
-            if isfield(state,'handles') && isfield(state.handles,'nRxEdit') && ishghandle(state.handles.nRxEdit)
-                set(state.handles.nRxEdit,'String',num2str(state.nRx));
-            end
-            guidata(hFig,state);
         end
 
         updateBusyState(hFig,'Loading K-space data...');
@@ -328,11 +379,10 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
         end
 
         if radial || any(offset)
-            trajFileName = resolveCompanionTrajectoryFile(dataFileName,selectedFiles);
+            trajFileName = resolveCompanionFile(dataFileName,selectedFiles,'.ktrj');
             if exist(trajFileName,'file') ~= 2
                 [trajName,trajPath,trajIndex] = uigetfile('*.ktrj','OPEN: Trajectory File',dataPath);
                 if isequal(trajIndex,0)
-                    setStatus(hFig,'Status: trajectory selection cancelled');
                     return;
                 end
                 trajFileName = fullfile(trajPath,trajName);
@@ -367,43 +417,40 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
             warndlg(warningText,'Trajectory Warning','modal');
         end
 
-        state = guidata(hFig);
-        state.protocol = protocol;
+        state = initializeDataset(guidata(hFig),protocol,signalData,dataPath,selectedFiles);
         state.reconMode = 'radial';
-        state.signalDataClean = signalData;
-        state.cleanRecon = [];
-        state.loadedNRx = size(signalData,2);
-        state.noiseData = [];
-        state.noiseLoaded = false;
-        state.noiseScale = 0;
-        state.signalFiles = selectedFiles;
-        state.noiseFiles = {};
-        state.dataPath = dataPath;
         state.samplesPerSpoke = samplesPerSpoke;
         state.numSpokes = numSpokes;
         state.reconSize = reconSize;
         state.defaultReconSize = reconSize;
         state.trajectory = traj;
-        state.reconContext = [];
         state.cartesianMatSize = [];
-        state.resetSliceIndex = true;
         guidata(hFig,state);
-        updateBusyState(hFig,'Reconstructing 3D volume...');
-        applyCurrentReconstruction(hFig,'Status: reconstructing 3D volume...');
-        setStatus(hFig,'Status: reconstruction complete');
+        applyCurrentReconstruction(hFig,'Reconstructing 3D volume...');
     end
 end
 
 function loadCartesianReconstruction(hFig,protocol,signalData,dataPath,selectedFiles)
-
     updateBusyState(hFig,'Reconstructing Cartesian data...');
     [recon,matSize] = reconstructCartesianDataset(signalData,protocol);
 
-    state = guidata(hFig);
-    state.protocol = protocol;
+    state = initializeDataset(guidata(hFig),protocol,signalData,dataPath,selectedFiles);
     state.reconMode = 'cartesian';
-    state.signalDataClean = signalData;
     state.cleanRecon = recon;
+    state.samplesPerSpoke = [];
+    state.numSpokes = [];
+    state.reconSize = [];
+    state.defaultReconSize = [];
+    state.trajectory = [];
+    state.cartesianMatSize = matSize;
+    showReconstruction(hFig,state,recon);
+end
+
+function state = initializeDataset(state,protocol,signalData,dataPath,selectedFiles)
+    state.protocol = protocol;
+    state.signalDataClean = signalData;
+    state.cleanRecon = [];
+    state.reconContext = [];
     state.loadedNRx = size(signalData,2);
     state.noiseData = [];
     state.noiseLoaded = false;
@@ -411,68 +458,23 @@ function loadCartesianReconstruction(hFig,protocol,signalData,dataPath,selectedF
     state.signalFiles = selectedFiles;
     state.noiseFiles = {};
     state.dataPath = dataPath;
-    state.samplesPerSpoke = [];
-    state.numSpokes = [];
-    state.reconSize = [];
-    state.defaultReconSize = [];
-    state.trajectory = [];
-    state.reconContext = [];
-    state.cartesianMatSize = matSize;
-    state.reconInfo = recon.info;
-    state.volumeRSS = recon.volumeRSS;
-    state.volumeSOM = recon.volumeSOM;
-    state.volumeComplex = recon.volumeComplex;
-    state.kspaceMagnitude = recon.kspaceMagnitude;
-    state.dataLoaded = true;
-    state.sliceIndex = round((getVolumeDims(state.volumeRSS) + 1) / 2);
-    state.sliceIndex = clampSliceIndex(state.sliceIndex,getVolumeDims(state.volumeRSS));
-    state.resetSliceIndex = false;
-
-    guidata(hFig,state);
-    updateSliceControls(hFig);
-    updateInfoText(hFig);
-    updateDataControls(hFig);
-    set(state.handles.exportViewPopup,'Enable','on');
-    set(state.handles.exportViewButton,'Enable','on');
-    set(state.handles.snrMapButton,'Enable','off');
-    set(state.handles.trajectoryButton,'Enable','on');
-    refreshDisplay(hFig);
-    setStatus(hFig,'Status: Cartesian reconstruction complete');
+    state.sliceQuarterTurns = [0 0 0];
+    state.resetSliceIndex = true;
 end
 
 %% Interactive controls
-
-function nRxCallback(source,~)
-    hFig = ancestor(source,'figure');
-    state = guidata(hFig);
-    value = str2double(get(source,'String'));
-    if isnan(value) || value < 1
-        value = 1;
-    end
-    state.nRx = max(1,round(value));
-    set(source,'String',num2str(state.nRx));
-    guidata(hFig,state);
-end
 
 function displayModeCallback(source,~)
     hFig = ancestor(source,'figure');
     state = guidata(hFig);
     state.displayMode = get(source,'Value');
+    state.globalImageLimits = [];
     guidata(hFig,state);
-    refreshDisplay(hFig);
+    refreshDisplay(hFig,false);
 end
 
-function loggingToggleCallback(source,~)
-    hFig = ancestor(source,'figure');
-    state = guidata(hFig);
-    state.loggingEnabled = get(source,'Value') ~= 0;
-    guidata(hFig,state);
-    setRadialRecoLoggingEnabled(state.loggingEnabled);
-    if state.loggingEnabled
-        setStatus(hFig,'Status: logging enabled');
-    else
-        setStatus(hFig,'Status: logging disabled');
-    end
+function globalScaleCallback(source,~)
+    refreshDisplay(ancestor(source,'figure'),false);
 end
 
 function sliceSliderCallback(source,~)
@@ -482,17 +484,18 @@ function sliceSliderCallback(source,~)
         return;
     end
 
-    sliderValue = round(get(source,'Value'));
-    switch get(source,'Tag')
-        case 'x'
-            state.sliceIndex(1) = sliderValue;
-        case 'y'
-            state.sliceIndex(2) = sliderValue;
-        case 'z'
-            state.sliceIndex(3) = sliderValue;
-    end
+    state.sliceIndex(source.UserData) = round(source.Value);
     guidata(hFig,state);
-    refreshDisplay(hFig);
+    refreshDisplay(hFig,false);
+end
+
+function rotateSliceCallback(source,~)
+    hFig = ancestor(source,'figure');
+    state = guidata(hFig);
+    column = source.UserData;
+    state.sliceQuarterTurns(column) = mod(state.sliceQuarterTurns(column)+1,4);
+    guidata(hFig,state);
+    refreshDisplay(hFig,false);
 end
 
 function loadNoiseCallback(source,~)
@@ -503,11 +506,9 @@ function loadNoiseCallback(source,~)
     end
 
     try
-        setStatus(hFig,'Status: selecting noise data...');
         [selectedFiles,dataPath] = selectNoiseFiles(state.loadedNRx,state.dataPath);
         if isempty(selectedFiles)
             logRadialReco('Noise selection cancelled');
-            setStatus(hFig,'Status: noise selection cancelled');
             return;
         end
 
@@ -529,13 +530,10 @@ function loadNoiseCallback(source,~)
         guidata(hFig,state);
 
         updateDataControls(hFig);
-        updateBusyState(hFig,'Reconstructing with noise...');
-        applyCurrentReconstruction(hFig,'Status: reconstructing with noise...');
-        setStatus(hFig,'Status: reconstruction complete (noise applied)');
+        applyCurrentReconstruction(hFig,'Reconstructing with noise...');
     catch ME
         logRadialReco('ERROR loading noise: %s',ME.message);
         logException(ME);
-        setStatus(hFig,'Status: noise load failed');
         errordlg(ME.message,'Noise Error','modal');
     end
 end
@@ -558,7 +556,6 @@ function noiseScaleCallback(source,~)
         state.noiseScale = 0;
         guidata(hFig,state);
         set(source,'String','0');
-        setStatus(hFig,'Status: load a .nois file before applying noise');
         return;
     end
 
@@ -570,16 +567,10 @@ function noiseScaleCallback(source,~)
     guidata(hFig,state);
 
     try
-        applyCurrentReconstruction(hFig,'Status: updating reconstruction noise scale...');
-        if noiseScale == 0
-            setStatus(hFig,'Status: reconstruction complete (noise disabled)');
-        else
-            setStatus(hFig,sprintf('Status: reconstruction complete (noise scale = %g)',noiseScale));
-        end
+        applyCurrentReconstruction(hFig,'Updating reconstruction noise scale...');
     catch ME
         logRadialReco('ERROR updating noise scale: %s',ME.message);
         logException(ME);
-        setStatus(hFig,'Status: reconstruction failed');
         errordlg(ME.message,'Reconstruction Error','modal');
     end
 end
@@ -591,10 +582,12 @@ function exportViewPortCallback(source,~)
         return;
     end
 
-    viewIndex = get(state.handles.exportViewPopup,'Value');
-    [sourceAxes,viewName] = getExportAxes(state.handles,viewIndex);
-    exportAxesToFigure(sourceAxes,viewName);
-    setStatus(hFig,['Status: exported ',viewName,' view']);
+    popup = state.handles.exportViewPopup;
+    viewIndex = get(popup,'Value');
+    viewNames = get(popup,'String');
+    viewAxes = get(popup,'UserData');
+    viewName = viewNames{viewIndex};
+    exportAxesToFigure(viewAxes(viewIndex),viewName);
 end
 
 function snrMapCallback(source,~)
@@ -617,14 +610,12 @@ function snrMapCallback(source,~)
     end
 
     try
-        setStatus(hFig,'Status: select a second, different .nois realization...');
         warndlg(['Select a second, different set of simulated noise files for the SNR map.',...
             sprintf('\n\n'),...
             'Do not reuse the same .nois realization that is already loaded.'],...
             'SNR Map','modal');
         [selectedFiles,dataPath] = selectNoiseFiles(state.loadedNRx,state.dataPath);
         if isempty(selectedFiles)
-            setStatus(hFig,'Status: second noise selection cancelled');
             return;
         end
 
@@ -640,7 +631,7 @@ function snrMapCallback(source,~)
         [state,reconContext] = getReconstructionContext(state);
         guidata(hFig,state);
 
-        setStatus(hFig,'Status: reconstructing SNR map...');
+        updateBusyState(hFig,'Reconstructing SNR map...');
         [state,cleanRecon] = getCleanReconstruction(state,reconContext);
         guidata(hFig,state);
         updateBusyState(hFig,'Reconstructing noisy realization 1...');
@@ -659,11 +650,9 @@ function snrMapCallback(source,~)
         assignin('base','radialRecoSNRNoisy2',noisyRecon2.volumeRSS);
 
         showSNRMapFigure(snrMap,state.sliceIndex);
-        setStatus(hFig,'Status: SNR map ready');
     catch ME
         logRadialReco('ERROR building SNR map: %s',ME.message);
         logException(ME);
-        setStatus(hFig,'Status: SNR map failed');
         errordlg(ME.message,'SNR Map Error','modal');
     end
 end
@@ -680,7 +669,7 @@ function viewTrajectoryCallback(source,~)
             fileName = state.protocol.TrajectoryFile;
             if ~isfile(fileName)
                 signalFile = fullfile(state.dataPath,state.signalFiles{1});
-                fileName = resolveCompanionTrajectoryFile(signalFile,state.signalFiles);
+                fileName = resolveCompanionFile(signalFile,state.signalFiles,'.ktrj');
             end
             if ~isfile(fileName)
                 [name,folder] = uigetfile('*.ktrj','OPEN: Trajectory File',state.dataPath);
@@ -696,7 +685,6 @@ function viewTrajectoryCallback(source,~)
         else
             return;
         end
-        setStatus(hFig,'Status: opened trajectory viewer');
     catch ME
         logException(ME);
         errordlg(ME.message,'Trajectory Error','modal');
@@ -726,23 +714,17 @@ function reconMatrixCallback(source,~)
         state.cleanRecon = [];
         state.resetSliceIndex = true;
         guidata(hFig,state);
-        applyCurrentReconstruction(hFig,'Status: updating radial reconstruction matrix...');
-        setStatus(hFig,'Status: reconstruction complete');
+        applyCurrentReconstruction(hFig,'Updating radial reconstruction matrix...');
     catch ME
         guidata(hFig,previous);
         set(source,'String',num2str(previous.reconSize));
-        setStatus(hFig,'Status: reconstruction matrix unchanged');
         errordlg(ME.message,'Radial Reconstruction Matrix');
     end
 end
 
 %% Reconstruction orchestration
 
-function applyCurrentReconstruction(hFig,statusMessage)
-    if nargin < 2 || isempty(statusMessage)
-        statusMessage = 'Status: reconstructing 3D volume...';
-    end
-
+function applyCurrentReconstruction(hFig,busyMessage)
     state = guidata(hFig);
     if isempty(state.signalDataClean)
         error('No data is loaded for reconstruction.');
@@ -750,85 +732,52 @@ function applyCurrentReconstruction(hFig,statusMessage)
 
     useCleanRecon = ~state.noiseLoaded || isempty(state.noiseData) || state.noiseScale == 0;
 
-    beginBusyState(hFig,stripStatusPrefix(statusMessage));
+    beginBusyState(hFig,busyMessage);
     reconstructionBusyCleanup = onCleanup(@() endBusyState(hFig)); %#ok<NASGU>
-    setStatus(hFig,statusMessage);
-    updateBusyState(hFig,stripStatusPrefix(statusMessage));
     state = guidata(hFig);
     if strcmpi(state.reconMode,'cartesian')
         if useCleanRecon
             if isempty(state.cleanRecon)
-                [recon,state.cartesianMatSize] = reconstructCartesianDataset(state.signalDataClean,state.protocol);
-                state.cleanRecon = recon;
-            else
-                recon = state.cleanRecon;
+                [state.cleanRecon,state.cartesianMatSize] = ...
+                    reconstructCartesianDataset(state.signalDataClean,state.protocol);
             end
+            recon = state.cleanRecon;
         else
             signalData = state.signalDataClean + state.noiseScale * state.noiseData;
             [recon,state.cartesianMatSize] = reconstructCartesianDataset(signalData,state.protocol);
         end
-
-        state.reconInfo = recon.info;
-        state.reconInfo.noiseScale = state.noiseScale;
-        state.reconInfo.noiseLoaded = state.noiseLoaded;
-        state.volumeRSS = recon.volumeRSS;
-        state.volumeSOM = recon.volumeSOM;
-        state.volumeComplex = recon.volumeComplex;
-        state.kspaceMagnitude = recon.kspaceMagnitude;
-        state.dataLoaded = true;
-        state.sliceIndex = clampSliceIndex(state.sliceIndex,getVolumeDims(state.volumeRSS));
-        guidata(hFig,state);
-        updateSliceControls(hFig);
-        updateInfoText(hFig);
-        updateDataControls(hFig);
-        set(state.handles.exportViewPopup,'Enable','on');
-        set(state.handles.exportViewButton,'Enable','on');
-        set(state.handles.snrMapButton,'Enable','off');
-        set(state.handles.trajectoryButton,'Enable','on');
-        refreshDisplay(hFig);
-        return;
-    end
-
-    if isempty(state.trajectory)
-        error('No radial trajectory is loaded for reconstruction.');
-    end
-
-    [state,reconContext] = getReconstructionContext(state);
-    if useCleanRecon
-        if isempty(state.cleanRecon)
-            logRadialReco('Starting clean reconstruction noiseLoaded=%d noiseScale=%g signal=%s',...
-                state.noiseLoaded,state.noiseScale,reconstructionSizeString(state.signalDataClean));
-            [state,recon] = getCleanReconstruction(state,reconContext);
-            logRadialReco('Reconstruction complete RSS=%s SOM=%s Complex=%s Kspace=%s',...
-                reconstructionSizeString(recon.volumeRSS),reconstructionSizeString(recon.volumeSOM),...
-                reconstructionSizeString(recon.volumeComplex),reconstructionSizeString(recon.kspaceMagnitude));
-        else
-            logRadialReco('Reusing cached clean reconstruction noiseLoaded=%d noiseScale=%g',...
-                state.noiseLoaded,state.noiseScale);
-            recon = state.cleanRecon;
-        end
     else
-        signalData = state.signalDataClean + state.noiseScale * state.noiseData;
-        logRadialReco('Starting reconstruction noiseLoaded=%d noiseScale=%g signal=%s',...
-            state.noiseLoaded,state.noiseScale,reconstructionSizeString(signalData));
-        recon = reconstructSignalDataset(state,signalData,reconContext);
-        logRadialReco('Reconstruction complete RSS=%s SOM=%s Complex=%s Kspace=%s',...
+        if isempty(state.trajectory)
+            error('No radial trajectory is loaded for reconstruction.');
+        end
+        [state,reconContext] = getReconstructionContext(state);
+        if useCleanRecon
+            [state,recon] = getCleanReconstruction(state,reconContext);
+        else
+            signalData = state.signalDataClean + state.noiseScale * state.noiseData;
+            logRadialReco('Reconstructing with noise scale %g',state.noiseScale);
+            recon = reconstructSignalDataset(state,signalData,reconContext);
+        end
+        logRadialReco('Reconstruction ready RSS=%s SOM=%s Complex=%s Kspace=%s',...
             reconstructionSizeString(recon.volumeRSS),reconstructionSizeString(recon.volumeSOM),...
             reconstructionSizeString(recon.volumeComplex),reconstructionSizeString(recon.kspaceMagnitude));
     end
+    showReconstruction(hFig,state,recon);
+end
 
+function showReconstruction(hFig,state,recon)
     state.reconInfo = recon.info;
-    state.reconInfo.noiseScale = state.noiseScale;
-    state.reconInfo.noiseLoaded = state.noiseLoaded;
     state.volumeRSS = recon.volumeRSS;
     state.volumeSOM = recon.volumeSOM;
     state.volumeComplex = recon.volumeComplex;
+    state.globalImageLimits = [];
     state.kspaceMagnitude = recon.kspaceMagnitude;
     state.dataLoaded = true;
-    if isfield(state,'resetSliceIndex') && state.resetSliceIndex
-        state.sliceIndex = round((getVolumeDims(state.volumeRSS) + 1) / 2);
+    dims = getVolumeDims(state.volumeRSS);
+    if state.resetSliceIndex
+        state.sliceIndex = round((dims + 1) / 2);
     else
-        state.sliceIndex = clampSliceIndex(state.sliceIndex,getVolumeDims(state.volumeRSS));
+        state.sliceIndex = clampSliceIndex(state.sliceIndex,dims);
     end
     state.resetSliceIndex = false;
 
@@ -836,11 +785,11 @@ function applyCurrentReconstruction(hFig,statusMessage)
     updateSliceControls(hFig);
     updateInfoText(hFig);
     updateDataControls(hFig);
-    set(state.handles.exportViewPopup,'Enable','on');
-    set(state.handles.exportViewButton,'Enable','on');
-    set(state.handles.snrMapButton,'Enable','on');
-    set(state.handles.trajectoryButton,'Enable','on');
-    refreshDisplay(hFig);
+    handles = state.handles;
+    set([handles.exportViewPopup handles.exportViewButton handles.trajectoryButton],'Enable','on');
+    % Radial users can open the SNR control to see the noise requirements.
+    set(handles.snrMapButton,'Enable',onOff(strcmpi(state.reconMode,'radial')));
+    refreshDisplay(hFig,true);
 end
 
 function [state,reconContext] = getReconstructionContext(state)
@@ -866,10 +815,6 @@ function [state,cleanRecon] = getCleanReconstruction(state,reconContext)
 end
 
 function recon = reconstructSignalDataset(state,signalData,reconContext)
-    if nargin < 3 || isempty(reconContext)
-        [~,reconContext] = getReconstructionContext(state);
-    end
-
     if isfield(state.protocol,'FOVPhase')
         signalData = signalData .* state.protocol.FOVPhase;
     end
@@ -1064,7 +1009,7 @@ function appendSNRROIResult(hListBox,resultLine)
     set(hListBox,'String',resultLines,'Value',numel(resultLines));
 end
 
-%% Display and status management
+%% Display management
 
 function updateDataControls(hFig)
     state = guidata(hFig);
@@ -1087,33 +1032,13 @@ function sliceIndex = clampSliceIndex(sliceIndex,dims)
         return;
     end
 
-    sliceIndex = [...
-        min(max(1,round(sliceIndex(1))),dims(1)),...
-        min(max(1,round(sliceIndex(2))),dims(2)),...
-        min(max(1,round(sliceIndex(3))),dims(3))];
+    sliceIndex = min(max(1,round(reshape(sliceIndex,1,3))),dims(1:3));
 end
 
 function dims = getVolumeDims(volume)
     dims = size(volume);
     if numel(dims) < 3
         dims(end+1:3) = 1;
-    end
-end
-
-function [hAxes,viewName] = getExportAxes(handles,viewIndex)
-    switch viewIndex
-        case 1
-            hAxes = handles.axialAxes;
-            viewName = 'Axial';
-        case 2
-            hAxes = handles.sagittalAxes;
-            viewName = 'Sagittal';
-        case 3
-            hAxes = handles.coronalAxes;
-            viewName = 'Coronal';
-        otherwise
-            hAxes = handles.kspaceAxes;
-            viewName = 'K-Space';
     end
 end
 
@@ -1141,7 +1066,7 @@ function exportAxesToFigure(sourceAxes,viewName)
     colorbar(hAxes,'vert');
 end
 
-function refreshDisplay(hFig)
+function refreshDisplay(hFig,refreshKSpace)
     state = guidata(hFig);
     handles = state.handles;
 
@@ -1149,7 +1074,9 @@ function refreshDisplay(hFig)
         initializeAxes(handles.axialAxes,'Axial');
         initializeAxes(handles.sagittalAxes,'Sagittal');
         initializeAxes(handles.coronalAxes,'Coronal');
-        initializeAxes(handles.kspaceAxes,'K-Space');
+        for hAxes = handles.kspaceAxes
+            clearPreviewAxes(hAxes);
+        end
         return;
     end
 
@@ -1157,23 +1084,90 @@ function refreshDisplay(hFig)
     yIdx = state.sliceIndex(2);
     zIdx = state.sliceIndex(3);
 
-    [axialSlice,sagittalSlice,coronalSlice] = selectDisplaySlices(state,xIdx,yIdx,zIdx);
+    orientations = {'Sagittal';'Coronal';'Axial'};
+    imageAxes = [handles.sagittalAxes handles.coronalAxes handles.axialAxes];
+    isCartesian = strcmpi(state.reconMode,'cartesian');
+    if isCartesian
+        available = find(strcmp(orientations,state.reconInfo.sliceOrientation));
+    else
+        available = 1:3;
+    end
+    if refreshKSpace
+        inactive = setdiff(1:3,available);
+        for hAxes = [imageAxes(inactive) handles.kspaceAxes(inactive)]
+            clearPreviewAxes(hAxes);
+        end
+        set(handles.rotateButtons(available),'Enable','on');
+        set(handles.rotateButtons(inactive),'Enable','off');
+        for column = available
+            if isCartesian
+                left = 0.065;
+                width = 0.87;
+            else
+                left = (column-1)*0.35;
+                width = 0.30;
+            end
+            set(imageAxes(column),'Position',[left 0.54 width 0.38]);
+            set(handles.kspaceAxes(column),'Position',[left 0.08 width 0.38]);
+        end
+        refreshKSpacePanes(state,available,isCartesian);
 
-    updateAxesImage(handles.axialAxes,axialSlice,...
-        sprintf('Axial (z = %d)',zIdx));
-    updateAxesImage(handles.sagittalAxes,sagittalSlice,...
-        sprintf('Sagittal (x = %d)',xIdx));
-    updateAxesImage(handles.coronalAxes,coronalSlice,...
-        sprintf('Coronal (y = %d)',yIdx));
+        viewNames = [orientations(available); strcat(orientations(available),{' K-space'})];
+        popup = handles.exportViewPopup;
+        if ~isequal(popup.String,viewNames)
+            viewAxes = [imageAxes(available) handles.kspaceAxes(available)];
+            set(popup,'String',viewNames,'Value',1,'UserData',viewAxes);
+        end
+    end
 
-    kspaceZ = mapImageSliceToKSpace(zIdx,size(state.volumeRSS,3),size(state.kspaceMagnitude,3));
-    kspaceSlice = rot90(log1p(squeeze(state.kspaceMagnitude(:,:,kspaceZ))));
-    updateAxesImage(handles.kspaceAxes,kspaceSlice,...
-        sprintf('K-Space |k| (kz = %d)',kspaceZ));
+    [sourceVolume,sliceTransform] = selectDisplayVolume(state);
+    useGlobalScale = handles.globalScaleCheckbox.Value ~= 0;
+    if useGlobalScale && isempty(state.globalImageLimits)
+        state.globalImageLimits = calculateGlobalImageLimits(sourceVolume,sliceTransform,...
+            state.displayMode <= 3);
+        guidata(hFig,state);
+    end
+    imageTitles = {sprintf('Sagittal (x = %d)',xIdx),...
+        sprintf('Coronal (y = %d)',yIdx),sprintf('Axial (z = %d)',zIdx)};
+
+    for column = available
+        if isCartesian
+            imageTitles{column} = orientations{column};
+        end
+        imageSlice = extractDisplaySlice(sourceVolume,column,state.sliceIndex(column),sliceTransform);
+        imageSlice = rot90(imageSlice,-state.sliceQuarterTurns(column));
+        updateAxesImage(imageAxes(column),imageSlice,imageTitles{column});
+        if useGlobalScale
+            imageAxes(column).CLim = state.globalImageLimits;
+        end
+    end
 
     set(handles.xValue,'String',num2str(xIdx));
     set(handles.yValue,'String',num2str(yIdx));
     set(handles.zValue,'String',num2str(zIdx));
+end
+
+function refreshKSpacePanes(state,available,isCartesian)
+    kspaceAxes = state.handles.kspaceAxes;
+    if isCartesian
+        updateAxesImage(kspaceAxes(available),rot90(log1p(state.kspaceMagnitude)),...
+            'K-space (log magnitude)');
+        return;
+    end
+
+    frequencyAxes = 'xyz';
+    peak = 0;
+    for column = 1:3
+        center = floor(size(state.kspaceMagnitude,column)/2) + 1;
+        kspaceSlice = extractDisplaySlice(state.kspaceMagnitude,column,center,@log1p);
+        updateAxesImage(kspaceAxes(column),kspaceSlice,...
+            sprintf('Gridded k-space (k_{%c} = 0)',frequencyAxes(column)));
+        peak = max(peak,max(kspaceSlice(:)));
+    end
+    if peak == 0
+        peak = 1;
+    end
+    set(kspaceAxes,'CLim',[0 peak]);
 end
 
 function updateAxesImage(hAxes,imageData,titleStr)
@@ -1184,16 +1178,30 @@ function updateAxesImage(hAxes,imageData,titleStr)
         if numel(hImages) > 1
             delete(hImages(2:end));
         end
-        set(hImages(1),'CData',imageData);
+        set(hImages(1),'CData',imageData,'XData',[1 size(imageData,2)],...
+            'YData',[1 size(imageData,1)]);
         set(hAxes,'CLimMode','auto');
     end
     axis(hAxes,'image');
     axis(hAxes,'off');
     colormap(hAxes,gray(256));
-    title(titleStr);
+    title(hAxes,titleStr);
+    hAxes.PickableParts = 'visible';
+    if ~isempty(hAxes.Toolbar)
+        hAxes.Toolbar.Visible = 'on';
+    end
 end
 
-function [axialSlice,sagittalSlice,coronalSlice] = selectDisplaySlices(state,xIdx,yIdx,zIdx)
+function clearPreviewAxes(hAxes)
+    cla(hAxes);
+    title(hAxes,'');
+    hAxes.PickableParts = 'none';
+    if ~isempty(hAxes.Toolbar)
+        hAxes.Toolbar.Visible = 'off';
+    end
+end
+
+function [sourceVolume,sliceTransform] = selectDisplayVolume(state)
     switch state.displayMode
         case 1
             sourceVolume = state.volumeRSS;
@@ -1215,9 +1223,30 @@ function [axialSlice,sagittalSlice,coronalSlice] = selectDisplaySlices(state,xId
             sliceTransform = @imag;
     end
 
-    axialSlice = extractDisplaySlice(sourceVolume,3,zIdx,sliceTransform);
-    sagittalSlice = extractDisplaySlice(sourceVolume,1,xIdx,sliceTransform);
-    coronalSlice = extractDisplaySlice(sourceVolume,2,yIdx,sliceTransform);
+end
+
+function limits = calculateGlobalImageLimits(volume,transform,isMagnitude)
+    if ~isempty(transform)
+        volume = transform(volume);
+    end
+    limits = double([min(volume(:),[],'omitnan') max(volume(:),[],'omitnan')]);
+    if any(~isfinite(limits))
+        finiteValues = volume(isfinite(volume));
+        if isempty(finiteValues)
+            limits = [0 1];
+        else
+            limits = double([min(finiteValues) max(finiteValues)]);
+        end
+    end
+    if isMagnitude
+        limits = [0 max(limits(2),0)];
+        if limits(2) == 0
+            limits(2) = 1;
+        end
+    elseif limits(1) == limits(2)
+        padding = max(1,abs(limits(1))) * 0.01;
+        limits = limits + [-padding padding];
+    end
 end
 
 function sliceData = extractDisplaySlice(volume,dimension,index,sliceTransform)
@@ -1236,18 +1265,13 @@ function sliceData = extractDisplaySlice(volume,dimension,index,sliceTransform)
     end
 end
 
-function kspaceIdx = mapImageSliceToKSpace(imageIdx,imageSize,kspaceSize)
-    if imageSize <= 1
-        kspaceIdx = round((kspaceSize + 1) / 2);
-    else
-        kspaceIdx = round((imageIdx - 1) / (imageSize - 1) * (kspaceSize - 1)) + 1;
-    end
-    kspaceIdx = min(max(kspaceIdx,1),kspaceSize);
-end
-
 function updateSliceControls(hFig)
     state = guidata(hFig);
     handles = state.handles;
+    if strcmpi(state.reconMode,'cartesian')
+        set([handles.xSlider handles.ySlider handles.zSlider],'Enable','off');
+        return;
+    end
     dims = getVolumeDims(state.volumeRSS);
 
     configureSlider(handles.xSlider,dims(1),state.sliceIndex(1));
@@ -1284,28 +1308,36 @@ function updateInfoText(hFig)
             ['Files: ',protName,protExt],...
             noiseSummary...
             };
-        set(state.handles.infoText,'String',infoLines);
-        set(state.handles.paramText,'String','Cartesian FFT reconstruction');
-        return;
+        acquisitionLines = {
+            ['Slice orientation: ',protocol.SliceOrientation],...
+            ['PE direction: ',protocol.PEDirection]
+            };
+    else
+        [~,trajName,trajExt] = fileparts(protocol.TrajectoryFile);
+        recommendedSpokes = estimateRecommendedSpokes(info,info.retainedMaxRadius);
+        spokeRatio = info.numSpokes / recommendedSpokes;
+
+        infoLines = {
+            ['Sequence: ',protocol.SequenceType],...
+            ['FOV / MatSize: ',num2str(protocol.FOV),' / ',num2str(protocol.MatSize)],...
+            sprintf('Readout x Spokes: %d x %d | Rx: %d',...
+                info.samplesPerSpoke,info.numSpokes,state.loadedNRx),...
+            sprintf('Spoke density: %d / %d (%.2f%% of rough Nyquist)',...
+                info.numSpokes,recommendedSpokes,100*spokeRatio),...
+            sprintf('Recon: %d^3 | %.4g mm voxels | Noise Scale: %g',...
+                info.reconSize,1000*info.voxelSizeMeters(1),state.noiseScale),...
+            ['Files: ',protName,protExt,' | ',trajName,trajExt],...
+            noiseSummary...
+            };
+        acquisitionLines = {};
+        if ~isempty(protocol.RadialResolutionMm)
+            acquisitionLines = {sprintf('Nominal radial resolution (mm): %g',protocol.RadialResolutionMm)};
+        end
     end
-
-    [~,trajName,trajExt] = fileparts(protocol.TrajectoryFile);
-    recommendedSpokes = estimateRecommendedSpokes(info,info.retainedMaxRadius);
-    spokeRatio = info.numSpokes / recommendedSpokes;
-
-    infoLines = {
-        ['Sequence: ',protocol.SequenceType],...
-        ['FOV / MatSize: ',num2str(protocol.FOV),' / ',num2str(protocol.MatSize)],...
-        ['Readout x Spokes: ',num2str([info.samplesPerSpoke, info.numSpokes])],...
-        sprintf('Spoke density: %d / %d (%.2f%% of rough Nyquist)',...
-            info.numSpokes,recommendedSpokes,100*spokeRatio),...
-        sprintf('Recon: %d^3 | %.4g mm voxels | Noise Scale: %g',...
-            info.reconSize,1000*info.voxelSizeMeters(1),state.noiseScale),...
-        ['Files: ',protName,protExt,' | ',trajName,trajExt],...
-        noiseSummary...
-        };
-    set(state.handles.infoText,'String',infoLines);
-    set(state.handles.paramText,'String','r^2 DCF, Kaiser-Bessel width 4, 2x oversampling');
+    infoLines = [infoLines(:); acquisitionLines(:); protocol.SequenceDetails];
+    infoBox = state.handles.infoText;
+    set(infoBox,'String',infoLines,'Value',min(infoBox.Value,numel(infoLines)),...
+        'ListboxTop',min(infoBox.ListboxTop,numel(infoLines)));
 end
 
 function noiseSummary = formatNoiseSummary(state)
@@ -1403,12 +1435,6 @@ function plotTrajectoryFigure(traj,info)
     text(0,1,infoLines,'Parent',hInfo,'VerticalAlignment','top');
 end
 
-function setStatus(hFig,message)
-    state = guidata(hFig);
-    set(state.handles.statusText,'String',{message});
-    drawnow;
-end
-
 function beginBusyState(hFig,message)
     if ~isgraphics(hFig,'figure')
         return;
@@ -1465,60 +1491,44 @@ function endBusyState(hFig)
     drawnow;
 end
 
-function message = stripStatusPrefix(message)
-    prefix = 'Status: ';
-    if strncmp(message,prefix,numel(prefix))
-        message = message((numel(prefix)+1):end);
-    end
-end
-
 %% File selection and input parsing
 
-function [selectedFiles,dataPath] = selectSignalFiles(nRx)
+function [selectedFiles,dataPath] = selectSignalFiles()
     repositoryPath = fileparts(fileparts(fileparts(fileparts(mfilename('fullpath')))));
     initialPath = fullfile(repositoryPath,'protocols','*.ksig');
-    [selectedFiles,dataPath] = selectComplexFiles(nRx,'*.ksig','OPEN: K-space Data',initialPath);
+    [selectedFiles,dataPath] = selectComplexFiles('*.ksig','OPEN: K-space Data',initialPath);
 end
 
 function [selectedFiles,dataPath] = selectNoiseFiles(nRx,initialPath)
     if nargin < 2
         initialPath = '';
     end
-    [selectedFiles,dataPath] = selectComplexFiles(nRx,'*.nois','OPEN: Noise',initialPath);
+    [selectedFiles,dataPath] = selectComplexFiles('*.nois','OPEN: Noise',initialPath);
+    if ~isempty(selectedFiles) && numel(selectedFiles) ~= nRx
+        error('Select one noise file for each loaded receive channel.');
+    end
+    selectedFiles = sortSignalFiles(selectedFiles);
 end
 
-function [selectedFiles,dataPath] = selectComplexFiles(nRx,fileSpec,dialogTitle,initialPath)
+function [selectedFiles,dataPath] = selectComplexFiles(fileSpec,dialogTitle,initialPath)
     dataPath = '';
     selectedFiles = {};
 
-    if nargin < 4 || isempty(initialPath)
+    if isempty(initialPath)
         dialogPath = fileSpec;
     else
         dialogPath = initialPath;
     end
 
-    if nRx == 1
-        [fileName,pathName,index] = uigetfile(fileSpec,dialogTitle,dialogPath);
-        if isequal(index,0)
-            return;
-        end
-        selectedFiles = {fileName};
-        dataPath = pathName;
-    else
-        [fileNames,pathName,index] = uigetfile(fileSpec,dialogTitle,dialogPath,...
-            'Multiselect','on');
-        if isequal(index,0)
-            return;
-        end
-        if ischar(fileNames)
-            fileNames = {fileNames};
-        end
-        if numel(fileNames) ~= nRx
-            error('Check the number of Rx channels and selected files.');
-        end
-        selectedFiles = sortSignalFiles(fileNames);
-        dataPath = pathName;
+    [fileNames,pathName,index] = uigetfile(fileSpec,dialogTitle,dialogPath,'Multiselect','on');
+    if isequal(index,0)
+        return;
     end
+    if ischar(fileNames)
+        fileNames = {fileNames};
+    end
+    selectedFiles = fileNames;
+    dataPath = pathName;
 end
 
 function sortedFiles = sortSignalFiles(fileNames)
@@ -1534,32 +1544,6 @@ function sortedFiles = sortSignalFiles(fileNames)
     end
     [~,order] = sort(sortKeys);
     sortedFiles = fileNames(order);
-end
-
-function selectedFiles = discoverNumberedSignalFiles(dataPath,firstFile,numRx)
-    [~,baseName,extension] = fileparts(firstFile);
-    token = regexp(baseName,'^(.*?)(\d+)$','tokens','once');
-    if isempty(token)
-        baseRoot = baseName;
-    else
-        baseRoot = token{1};
-    end
-
-    selectedFiles = cell(1,numRx);
-    missingFiles = {};
-    for idx = 1:numRx
-        candidate = [baseRoot,num2str(idx),extension];
-        selectedFiles{idx} = candidate;
-        if exist(fullfile(dataPath,candidate),'file') ~= 2
-            missingFiles{end+1} = candidate; %#ok<AGROW>
-        end
-    end
-
-    if ~isempty(missingFiles)
-        error('Could not find all numbered Rx signal files. Missing: %s',strjoin(missingFiles,', '));
-    end
-
-    selectedFiles = sortSignalFiles(selectedFiles);
 end
 
 function signalData = loadSignalDataFiles(dataPath,selectedFiles)
@@ -1616,7 +1600,7 @@ function trajFlat = loadTrajectoryFile(fileName,totalSamples)
     logRadialReco('Read trajectory file: %s trajFlat=%s',fileName,reconstructionSizeString(trajFlat));
 end
 
-function protocol = parseRadialProtocolFile(protFileName)
+function protocol = readReconstructionProtocol(protFileName)
     protocol.SequenceType = 'Unknown';
     protocol.FOV = [0 0];
     protocol.MatSize = [0 0];
@@ -1628,6 +1612,32 @@ function protocol = parseRadialProtocolFile(protFileName)
     protocol.PEDirection = 'P--A';
     protocol.FOVOffset = [0 0 0];
     protocol.ModelSpacing = [NaN NaN NaN];
+
+    % Keep display-only fields as saved so they do not affect reconstruction.
+    sequenceFields = {
+        'Nucleus:', 'Nucleus';
+        'B0(T):', 'B0 (T)';
+        'TE(ms):', 'TE (ms)';
+        'TR(ms):', 'TR (ms)';
+        '#Dummy TRs:', 'Dummy TRs';
+        'ADC Freq(kHz):', 'ADC sampling rate (kHz)';
+        'RF Shape:', 'RF shape';
+        'RF Duration(ms):', 'RF duration (ms)';
+        '# Points in RF Pulse:', 'RF pulse points';
+        'RF Flip Angle:', 'RF flip angle (deg)';
+        'Target B1+ (uT):', 'Target B1+ (uT)';
+        'Shim B1+ (uT):', 'Shim B1+ (uT)';
+        'TI_Duration(ms):', 'Saved TI (ms)';
+        'Slice Thickness:', 'Saved slice thickness (mm)';
+        'Slice Position:', 'Saved slice position (model voxels)';
+        'SS:', 'Gradient SS enabled';
+        'PE:', 'Gradient PE enabled';
+        'FE:', 'Gradient FE enabled';
+        'Scanner Profile:', 'Scanner profile';
+        'Scanner Gradient Limits:', 'Scanner limits (mT/m, T/m/s, us)';
+        'NEX:', 'NEX';
+        };
+    details = cell(size(sequenceFields,1),1);
 
     fid = fopen(protFileName,'r');
     if fid == -1
@@ -1668,6 +1678,15 @@ function protocol = parseRadialProtocolFile(protFileName)
 
             case 'Model Res.:'
                 protocol.ModelSpacing = readProtocolXYZ(fid,'Model Res.');
+
+            otherwise
+                field = find(strcmp(sequenceFields(:,1),key),1);
+                if ~isempty(field)
+                    valueLine = fgetl(fid);
+                    if ischar(valueLine) && ~isempty(strtrim(valueLine))
+                        details{field} = [sequenceFields{field,2},': ',strtrim(valueLine)];
+                    end
+                end
         end
         protLine = fgetl(fid);
     end
@@ -1675,6 +1694,7 @@ function protocol = parseRadialProtocolFile(protFileName)
     if isempty(protocol.SequenceType)
         protocol.SequenceType = 'Unknown';
     end
+    protocol.SequenceDetails = details(~cellfun(@isempty,details));
 end
 
 function values = readProtocolXYZ(fid,fieldName)
@@ -1781,87 +1801,44 @@ end
 
 %% Companion-file resolution
 
-function protFileName = resolveCompanionProtocolFileRadial(dataFileName,selectedFiles)
-    [dataDir,dataBase] = fileparts(dataFileName);
+function fileName = resolveCompanionFile(signalFile,selectedFiles,extension)
+    [dataDir,dataBase] = fileparts(signalFile);
     candidateBases = {dataBase};
-    selectionBase = getSelectedFileBaseRadial(selectedFiles);
-
-    if ~isempty(selectionBase) && ~any(strcmp(candidateBases,selectionBase))
-        candidateBases{end+1} = selectionBase; %#ok<AGROW>
+    selectionBase = getSelectedFileBase(selectedFiles);
+    if ~isempty(selectionBase) && ~strcmp(dataBase,selectionBase)
+        candidateBases{end+1} = selectionBase;
     end
 
-    protFileName = fullfile(dataDir,[candidateBases{1},'.prot']);
-    for idx = 1:numel(candidateBases)
-        candidateFile = fullfile(dataDir,[candidateBases{idx},'.prot']);
-        if exist(candidateFile,'file') == 2
-            protFileName = candidateFile;
-            return;
+    fileName = fullfile(dataDir,[dataBase,extension]);
+    % Check exact candidates in the run folder before checking its parent.
+    searchDirs = {dataDir,fileparts(dataDir)};
+    for dirIndex = 1:numel(searchDirs)
+        folder = searchDirs{dirIndex};
+        if dirIndex == 2 && isempty(folder)
+            continue;
         end
-    end
-
-    parentDir = fileparts(dataDir);
-    if ~isempty(parentDir)
-        for idx = 1:numel(candidateBases)
-            candidateFile = fullfile(parentDir,[candidateBases{idx},'.prot']);
-            if exist(candidateFile,'file') == 2
-                protFileName = candidateFile;
+        for baseIndex = 1:numel(candidateBases)
+            candidate = fullfile(folder,[candidateBases{baseIndex},extension]);
+            if exist(candidate,'file') == 2
+                fileName = candidate;
                 return;
             end
         end
     end
 
-    protFiles = dir(fullfile(dataDir,'*.prot'));
-    if numel(protFiles) == 1
-        protFileName = fullfile(dataDir,protFiles(1).name);
+    candidates = dir(fullfile(dataDir,['*',extension]));
+    if isscalar(candidates)
+        fileName = fullfile(dataDir,candidates.name);
     end
 end
 
-function trajFileName = resolveCompanionTrajectoryFile(dataFileName,selectedFiles)
-    [dataDir,dataBase] = fileparts(dataFileName);
-    candidateBases = {dataBase};
-    selectionBase = getSelectedFileBaseRadial(selectedFiles);
-
-    if ~isempty(selectionBase) && ~any(strcmp(candidateBases,selectionBase))
-        candidateBases{end+1} = selectionBase; %#ok<AGROW>
-    end
-
-    trajFileName = fullfile(dataDir,[candidateBases{1},'.ktrj']);
-    for idx = 1:numel(candidateBases)
-        candidateFile = fullfile(dataDir,[candidateBases{idx},'.ktrj']);
-        if exist(candidateFile,'file') == 2
-            trajFileName = candidateFile;
-            return;
-        end
-    end
-
-    parentDir = fileparts(dataDir);
-    if ~isempty(parentDir)
-        for idx = 1:numel(candidateBases)
-            candidateFile = fullfile(parentDir,[candidateBases{idx},'.ktrj']);
-            if exist(candidateFile,'file') == 2
-                trajFileName = candidateFile;
-                return;
-            end
-        end
-    end
-
-    trajFiles = dir(fullfile(dataDir,'*.ktrj'));
-    if numel(trajFiles) == 1
-        trajFileName = fullfile(dataDir,trajFiles(1).name);
-    end
-end
-
-function selectionBase = getSelectedFileBaseRadial(selectedFiles)
-    if isempty(selectedFiles)
-        selectionBase = '';
-        return;
-    end
-
-    if ischar(selectedFiles)
-        selectedFiles = {selectedFiles};
-    end
+function selectionBase = getSelectedFileBase(selectedFiles)
 
     [~,selectionBase] = fileparts(selectedFiles{1});
+    if isscalar(selectedFiles)
+        selectionBase = regexprep(selectionBase,'\d+$','');
+        return;
+    end
     for idx = 2:numel(selectedFiles)
         [~,nextBase] = fileparts(selectedFiles{idx});
         maxLength = min(length(selectionBase),length(nextBase));
@@ -1880,24 +1857,7 @@ end
 
 %% Logging and small utilities
 
-function setRadialRecoLoggingEnabled(enabled)
-    setappdata(0,'reconstructionViewer_logging_enabled',logical(enabled));
-end
-
-function enabled = isRadialRecoLoggingEnabled()
-    if isappdata(0,'reconstructionViewer_logging_enabled')
-        enabled = logical(getappdata(0,'reconstructionViewer_logging_enabled'));
-    else
-        enabled = true;
-        setRadialRecoLoggingEnabled(enabled);
-    end
-end
-
 function logRadialReco(message,varargin)
-    if ~isRadialRecoLoggingEnabled()
-        return;
-    end
-
     timeStamp = datestr(now,'HH:MM:SS.FFF');
     if nargin > 1
         fprintf('[reconstructionViewer %s] %s\n',timeStamp,sprintf(message,varargin{:}));
@@ -1907,10 +1867,6 @@ function logRadialReco(message,varargin)
 end
 
 function logException(ME)
-    if ~isRadialRecoLoggingEnabled()
-        return;
-    end
-
     if isempty(ME.stack)
         fprintf(2,'[reconstructionViewer] No stack information available.\n');
         return;
