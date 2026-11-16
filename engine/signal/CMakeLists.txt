@@ -43,7 +43,7 @@ set(NUTATE_ENTRY_SOURCES
 
 add_library(NutateSignalCommon STATIC ${NUTATE_COMMON_SOURCES})
 target_include_directories(NutateSignalCommon PUBLIC include)
-target_link_libraries(NutateSignalCommon PUBLIC NutateNucleus)
+target_link_libraries(NutateSignalCommon PUBLIC NutateNucleus NutateModelInputs)
 
 add_executable(NutateSignal_CPU ${NUTATE_ENTRY_SOURCES})
 target_link_libraries(NutateSignal_CPU PRIVATE NutateSignalCommon)

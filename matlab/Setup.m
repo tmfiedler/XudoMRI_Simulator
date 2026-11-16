@@ -919,7 +919,9 @@ reset();
             if strcmp(reformatChoice,'Start Reformatter')
                 try
                     reformatter(studyDir);
-                    geometryFile = fullfile(studyDir,'geometry.smpl');
+                    [geometryDir,geometryName] = resolveProtocolPath( ...
+                        fullfile(studyDir,'geometry.smpl'),studyDir);
+                    geometryFile = fullfile(geometryDir,geometryName);
                     if exist(geometryFile,'file') == 2
                         ExpGeometry_Callback(source,eventdata,geometryFile);
                     end
@@ -1430,7 +1432,7 @@ reset();
             
             cd (fileAddr);
             
-            [fileName,pathName,index]=uigetfile({'*.smpl','Tissue Geometry File (*.smpl)';'*.*','All Fiiles (*.*)'},'OPEN: Geometry File');
+            [fileName,pathName,index]=uigetfile({'*.smpl;*.smpl.gz','Tissue Geometry File (*.smpl)';'*.*','All Fiiles (*.*)'},'OPEN: Geometry File');
             if index ~= 0
                 reset();
                 
@@ -1482,14 +1484,20 @@ reset();
             set(hExpGeoEdit,'FontAngle','normal');
 
             % Read in data.
-            fid = fopen(file);
+            try
+                [rawFile,expandedGeometry] = expandModelInput(file); %#ok<NASGU>
+            catch inputError
+                errordlg(inputError.message,'Geometry File Error');
+                return;
+            end
+            fid = fopen(rawFile,'r','ieee-le');
             if fid == -1
                 errordlg(['Unable to open geometry file: ',file],'File Error');
                 return;
             end
 
             legacyVoxelCount = fread(fid,1,'float32');
-            geometryFileInfo = dir(file);
+            geometryFileInfo = dir(rawFile);
             geometryHeaderBytes = 13 * 4;
             geometryRecordBytes = 4 * 4;
             if isempty(geometryFileInfo) || geometryFileInfo.bytes < geometryHeaderBytes
@@ -2024,7 +2032,7 @@ reset();
             
             cd (fileAddr);
             
-            [fileName,pathName,index]=uigetfile({'*.bfld','B1 Minus File (*.bfld)';'*.*','All Fiiles (*.*)'},'OPEN: B1 Minus File','MultiSelect','on');
+            [fileName,pathName,index]=uigetfile({'*.bfld;*.bfld.gz','B1 Minus File (*.bfld)';'*.*','All Fiiles (*.*)'},'OPEN: B1 Minus File','MultiSelect','on');
             if index ~= 0                
                 if (iscell(fileName) ~= 1 && Rx.Num == 1)
                     inputCmd{7,1}{1} = pathName;
@@ -2070,7 +2078,7 @@ reset();
             
             cd (fileAddr);
             
-            [fileName,pathName,index]=uigetfile({'*.efld','E1 Minus File (*.efld)';'*.*','All Fiiles (*.*)'},'OPEN: E1 Minus File','MultiSelect','on');
+            [fileName,pathName,index]=uigetfile({'*.efld;*.efld.gz','E1 Minus File (*.efld)';'*.*','All Fiiles (*.*)'},'OPEN: E1 Minus File','MultiSelect','on');
             if index ~= 0
                 if (iscell(fileName) ~= 1 && Rx.Num == 1)
                     inputCmd{8,1}{1} = pathName;

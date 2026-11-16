@@ -34,6 +34,19 @@ representable; larger integers are not all representable. Geometry and active
 B1/E1− readers check the actual payload size rather than trusting a rounded
 count header. Keep the geometry, maps and matching protocol together.
 
+Gzip-compressed geometry and coil maps (`.smpl.gz`, `.bfld.gz` and `.efld.gz`)
+are compatible with Setup, the field viewer and the applicable signal/noise
+engines. Each gzip file contains the complete ordinary binary, including its
+header. Use its compressed filename explicitly or replace a raw file with a
+same-name `.gz` sibling. An existing raw file takes precedence when the
+reference names it. Reading gzip inputs requires temporary disk space for
+their expanded contents. Set `compressOutput = true` in `matlab/reformatter.m`
+to write gzip files.
+Run `compressProtocolInputs` from MATLAB to select an existing protocol, replace
+its raw geometry and coil maps with verified gzip copies, and report input sizes.
+It also includes local CST `E_<channel>.efld` maps before they are assigned to a coil.
+The native Windows builds fetch and statically link zlib.
+
 ## Geometry (`.smpl`)
 
 The file begins with 13 float32 values, followed by `N` voxel records:

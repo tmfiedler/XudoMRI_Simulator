@@ -25,9 +25,15 @@ function resolvedFile = resolveProtocolFile(filePath, protocolDir)
 
     [~,fileBase,fileExt] = fileparts(resolvedFile);
     if ~isempty(fileBase)
-        fallbackFile = normalizeDrivePath([protocolDir,fileBase,fileExt]);
+        fallbackFile = normalizeDrivePath(fullfile(protocolDir,[fileBase,fileExt]));
         if exist(fallbackFile,'file') == 2
             resolvedFile = fallbackFile;
+        elseif any(strcmpi(fileExt,{'.smpl','.bfld','.efld'}))
+            if isfile([resolvedFile,'.gz'])
+                resolvedFile = [resolvedFile,'.gz'];
+            elseif isfile([fallbackFile,'.gz'])
+                resolvedFile = [fallbackFile,'.gz'];
+            end
         end
     end
 end

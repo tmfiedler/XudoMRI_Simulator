@@ -20,6 +20,8 @@
 // Parses the noise engine's exact-case Key=value command-line interface.
 // CmdValues stores effective values (including defaults), while CmdFlags records
 // which values were supplied explicitly.
+#include "ModelInputs.h"
+
 class CmdInterp
 {
 private:
@@ -68,6 +70,7 @@ private:
 	} cmdFlags;
 
 	// Verify required input filenames before any file loader is constructed.
+	nutate::ModelInputs modelInputs;
 	bool checkFileNames();	
 
 public:

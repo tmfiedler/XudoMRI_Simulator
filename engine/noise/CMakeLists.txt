@@ -27,7 +27,7 @@ set(NUTATE_NOISE_SOURCES
 )
 
 add_executable(NutateNoise ${NUTATE_NOISE_SOURCES})
-target_link_libraries(NutateNoise PRIVATE NutateNucleus)
+target_link_libraries(NutateNoise PRIVATE NutateNucleus NutateModelInputs)
 target_include_directories(NutateNoise PRIVATE include)
 target_compile_features(NutateNoise PRIVATE cxx_std_17)
 target_compile_definitions(NutateNoise PRIVATE NUTATE_VERSION="${NUTATE_VERSION}")

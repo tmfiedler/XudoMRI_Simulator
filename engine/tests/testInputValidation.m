@@ -53,6 +53,44 @@ signalMaps={['B1PlusFile=' fullfile(work,'tx.bfld')],['B1MinsFile=' fullfile(wor
 noise=fullfile(repo,'engine','bin','NutateNoise.exe');
 noiseArgs=[common {['E1MinsFile=' fullfile(work,'receive.efld')],'NoiseSeed=7','NEX=1'}];
 
+% Replacing geometry and selected maps with gzip siblings must preserve output.
+rawNames={'geometry.smpl','tx.bfld','receive.efld'};
+compressedPaths=gzip(cellfun(@(name)fullfile(work,name),rawNames,'UniformOutput',false),work);
+for idx=1:numel(rawNames)
+    source=fullfile(work,rawNames{idx});
+    [folder,name]=resolveProtocolPath(source,[work,filesep]);
+    assert(strcmp(fullfile(folder,name),source),'Raw input must take precedence.');
+    delete(source);
+    [folder,name]=resolveProtocolPath(rawNames{idx},[work,filesep]);
+    assert(strcmp(fullfile(folder,name),compressedPaths{idx}),'Missing gzip fallback.');
+    [rawCopy,copyCleanup]=expandModelInput(compressedPaths{idx});
+    copyfile(rawCopy,source); clear copyCleanup;
+end
+for b=backends
+    exe=fullfile(repo,'engine','bin',['NutateSignal_' b{1} '.exe']);
+    [~,rawSignal]=runSuccess(exe,[common signalMaps],work,['raw_gzip_' b{1}],false);
+    delete(fullfile(work,'geometry.smpl'),fullfile(work,'tx.bfld'));
+    mixedMaps=signalMaps; mixedMaps{1}=[mixedMaps{1},'.gz'];
+    [~,gzipSignal]=runSuccess(exe,[common mixedMaps],work,['gzip_' b{1}],false);
+    assert(isequal(rawSignal,gzipSignal),'Gzip inputs changed the signal.');
+    writeFloats(fullfile(work,'geometry.smpl'),geometry);
+    writeFloats(fullfile(work,'tx.bfld'),tx);
+end
+[~,rawNoise]=runSuccess(noise,noiseArgs,work,'raw_gzip_noise',true);
+delete(fullfile(work,'geometry.smpl'),fullfile(work,'receive.efld'));
+[~,gzipNoise]=runSuccess(noise,noiseArgs,work,'gzip_noise',true);
+assert(isequal(rawNoise,gzipNoise),'Gzip inputs changed the seeded noise.');
+writeFloats(fullfile(work,'geometry.smpl'),geometry);
+writeFloats(fullfile(work,'receive.efld'),efield);
+badGzip=fullfile(work,'bad.efld.gz');
+writeFloats(badGzip,efield);
+badNoiseArgs=noiseArgs;
+badNoiseArgs{end-2}=['E1MinsFile=' badGzip];
+runFailure(noise,badNoiseArgs,work,'bad_gzip_noise','gzip',true);
+% Remove siblings so later missing-input tests exercise truly missing files.
+delete(compressedPaths{:});
+fprintf('PASS gzip fallback, explicit gzip, mixed inputs and raw equivalence\n');
+
 for b=backends
     exe=fullfile(repo,'engine','bin',['NutateSignal_' b{1} '.exe']);
     runSuccess(exe,[common signalMaps],work,['valid_' b{1}],false);
@@ -181,7 +219,7 @@ else
     output=fullfile(folder,'result1.ksig');
 end
 end
-function log=runSuccess(exe,args,work,tag,noise)
+function [log,raw]=runSuccess(exe,args,work,tag,noise)
 [args,output]=withOutputs(args,work,tag,noise);
 [code,log]=runNative(exe,args);assert(code==0,'Valid fixture failed:\n%s',log);
 fid=fopen(output,'r','ieee-le');assert(fid>=0);raw=fread(fid,Inf,'single');fclose(fid);

@@ -295,6 +295,8 @@ bool CmdInterp::checkFileNames()
 
 	// ****************************************************************
 	// make sure geometry file exists
+	modelInputs.prepare(cmdValues.geom);
+	modelInputs.prepare(cmdValues.e1Mins);
 	str = cmdValues.geom;
 	fHandle.open(str.c_str(), std::ios::in | std::ios::binary);
 	if (fHandle.fail()) 

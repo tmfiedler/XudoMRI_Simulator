@@ -8,6 +8,18 @@ function studyFieldViewer(viewerData)
         return;
     end
 
+    expandedFiles = {};
+    preparedPaths = containers.Map('KeyType','char','ValueType','char');
+    for specIndex = 1:numel(mapSpecs)
+        for channelIndex = 1:numel(mapSpecs(specIndex).files)
+            source = mapSpecs(specIndex).files{channelIndex};
+            if ~isKey(preparedPaths,source)
+                [rawFile,expandedFiles{end+1}] = expandModelInput(source); %#ok<AGROW>
+                preparedPaths(source) = rawFile;
+            end
+            mapSpecs(specIndex).files{channelIndex} = preparedPaths(source);
+        end
+    end
     validateFieldHeaders(mapSpecs,viewerData);
 
     existingFigure = findall(0,'Type','figure','Tag','StudyFieldViewer');
@@ -179,6 +191,8 @@ function studyFieldViewer(viewerData)
             'DefaultUicontrolFontUnits','pixels',...
             'DefaultUicontrolFontSize',11,...
             'CloseRequestFcn',@closeViewer);
+        setappdata(state.figure,'ExpandedModelInputs',expandedFiles);
+        expandedFiles = {};
         movegui(state.figure,'center');
 
         uicontrol(state.figure,'Style','text','String','Map',...

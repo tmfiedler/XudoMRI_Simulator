@@ -15,8 +15,11 @@ when their stored contract changes.
 
 ## Unreleased
 
-
 ### Features
+
+- Support gzip-compressed geometry and coil maps in Setup, the field viewer,
+  and the signal and noise engines. The MATLAB compression helper reports
+  disk savings and includes unassigned CST E-field maps in the protocol folder.
 
 - Reco has a resizable viewer with scrollable controls and protocol details.
   It infers receive channels from the selected signal files.

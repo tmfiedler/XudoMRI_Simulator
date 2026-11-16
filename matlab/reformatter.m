@@ -1,4 +1,5 @@
 function [] = reformatter(protocol_folder)
+compressOutput = false; % Set to true to write gzip-compressed geometry and coil maps.
 %REFORMATTER Reformat CST data for compatibility with simulation.
 %   REFORMATTER() prompts for the destination protocol folder.
 %   REFORMATTER(PROTOCOL_FOLDER) writes directly to an existing protocol
@@ -142,7 +143,7 @@ geometry=padTo(geometry(crop{:}),dimensions,air_ID);
 num_rows=prod(dimensions);isocenter=round((1+dimensions)/2);
 header=[num_rows,1,dimensions(1),1,dimensions(2),1,dimensions(3),isocenter,resolution*1000];
 disp('(2/4) writing common-grid geometry.smpl...');
-writeReformatterBinaryData(fullfile(protocol_folder,'geometry.smpl'),header,geometry);
+writeReformatterBinaryData(fullfile(protocol_folder,'geometry.smpl'),header,geometry,compressOutput);
 clear geometry
 
 %% Rebuild B1 on the same physical points, preserving algebra and amplitudes
@@ -153,8 +154,8 @@ for ch=1:num_ch
  fprintf('Undefined B1 samples before replacement: plus %d, minus %d\n',nnz(isnan(b1p)),nnz(isnan(b1m)));
  b1p(~bodyMask|isnan(b1p))=0;b1m(~bodyMask|isnan(b1m))=0;
  fprintf('(3/4) writing B1 channel %d (CST port %d)...\n',ch,ports(ch));
- writeReformatterBinaryData(fullfile(protocol_folder,sprintf('B1p_%d.bfld',ch)),num_rows,padTo(b1p(crop{:}),dimensions,0));
- writeReformatterBinaryData(fullfile(protocol_folder,sprintf('B1m_%d.bfld',ch)),num_rows,padTo(b1m(crop{:}),dimensions,0));
+ writeReformatterBinaryData(fullfile(protocol_folder,sprintf('B1p_%d.bfld',ch)),num_rows,padTo(b1p(crop{:}),dimensions,0),compressOutput);
+ writeReformatterBinaryData(fullfile(protocol_folder,sprintf('B1m_%d.bfld',ch)),num_rows,padTo(b1m(crop{:}),dimensions,0),compressOutput);
  clear hx hy b1p b1m
 end
 clear bodyMask
@@ -168,7 +169,7 @@ for ch=1:num_ch
   E_field(:,:,:,2*component)=padTo(double(imag(field(crop{:}))),dimensions,0);
  end
  fprintf('(4/4) writing E channel %d (CST port %d)...\n',ch,ports(ch));
- writeReformatterBinaryData(fullfile(protocol_folder,sprintf('E_%d.efld',ch)),num_rows,E_field);
+ writeReformatterBinaryData(fullfile(protocol_folder,sprintf('E_%d.efld',ch)),num_rows,E_field,compressOutput);
  clear E_field field
 end
 fprintf('CST common-grid conversion complete. Took %.6f s\n',toc);
@@ -294,10 +295,13 @@ function validateMaterialArray(values,arrayName,voxelCount)
     end
 end
 
-function writeReformatterBinaryData(outputFile, header, data)
+function writeReformatterBinaryData(outputFile, header, data, compressOutput)
     % Write the active CST output without a text intermediate. The header and
     % record order match the historical little-endian float32 files.
-    [outputDir,~,extension] = fileparts(outputFile);
+    [outputDir,baseName,extension] = fileparts(outputFile);
+    if compressOutput && isfile(outputFile)
+        error('Move the existing raw file before writing gzip output: %s',outputFile);
+    end
     recordCount = header(1);
     if ~isnumeric(header) || any(~isfinite(header(:))) || ...
             recordCount < 1 || recordCount ~= floor(recordCount)
@@ -367,6 +371,18 @@ function writeReformatterBinaryData(outputFile, header, data)
             end
         end
         clear outputCleanup; % Close before renaming on Windows.
+        if compressOutput
+            compressionDir = tempname(outputDir);
+            [created,message] = mkdir(compressionDir);
+            if ~created, error('Unable to create compression folder: %s',message); end
+            compressionCleanup = onCleanup(@() rmdir(compressionDir,'s')); %#ok<NASGU>
+            stagedRaw = fullfile(compressionDir,[baseName,extension]);
+            [moved,message] = movefile(temporaryFile,stagedRaw);
+            if ~moved, error('Unable to stage %s: %s',outputFile,message); end
+            compressed = gzip(stagedRaw,compressionDir);
+            temporaryFile = compressed{1};
+            outputFile = [outputFile,'.gz'];
+        end
         [moved, message] = movefile(temporaryFile, outputFile, 'f');
         if ~moved
             error('Could not finish %s: %s', outputFile, message);
