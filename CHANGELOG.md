@@ -17,6 +17,8 @@ when their stored contract changes.
 
 ### Features
 
+- Add a Signal + Noise mode that queues two jobs in one run folder.
+
 - Support gzip-compressed geometry and coil maps in Setup, the field viewer,
   and the signal and noise engines. The MATLAB compression helper reports
   disk savings and includes unassigned CST E-field maps in the protocol folder.

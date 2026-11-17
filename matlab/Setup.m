@@ -806,16 +806,16 @@ hNoiseLoading = uicontrol(hMain,'Style','pushbutton','String','Noise: Full sampl
     'Tag','NoiseLoading','BusyAction','cancel','Callback',@NoiseLoading_Callback);
 
 uicontrol(hMain,'Style','text','string','Mode',...
-    'Position',[imagingX+335 imagingRowY(5)+3 40 13],...
+    'Position',[imagingX+335 imagingRowY(5)+3 36 13],...
     'BackgroundColor',[1,1,1]);
 hMode = uicontrol(hMain,'Style','popupmenu',...
-    'String',{'Signal';'SAR';'Noise'},'Value',1,...
-    'Position',[imagingX+375 imagingRowY(5) 85 20],...
+    'String',{'Signal';'SAR';'Noise';'Signal + Noise'},'Value',1,...
+    'Position',[imagingX+371 imagingRowY(5) 102 20],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel',...
     'Callback',{@Mode_Callback,''});
 
 hSignalGPU = uicontrol(hMain,'Style','checkbox','string','GPU','Value',0,...
-    'Position',[imagingX+468 imagingRowY(5)+3 45 13],...
+    'Position',[imagingX+479 imagingRowY(5)+3 42 13],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel',...
     'Callback',{@SignalGPU_Callback,''});
 
@@ -1899,7 +1899,7 @@ reset();
             set(hMode,'Enable','on');
             tempMode = get(hMode,'Value');
             switch tempMode
-                case 1
+                case {1,4}
                     set(hB0Edit,'Enable','on');
                     set(hNucleus,'Enable','on');
                     set(hExpDB0,'Enable','on');
@@ -1911,12 +1911,17 @@ reset();
                     set(hExpB1p,'Enable','on');
                     set(hExpE1p,'Enable','off');
                     
-                    set(hExpE1m,'Enable','off');
+                    if tempMode == 4
+                        noiseControls = 'on';
+                    else
+                        noiseControls = 'off';
+                    end
+                    set(hExpE1m,'Enable',noiseControls);
 
                     set(hNumIso,'Enable','on');
                     set(hCPU,'Enable','on');
                     set(hSignalGPU,'Enable','on');
-                    set(hNEX,'Enable','off');
+                    set(hNEX,'Enable',noiseControls);
                     
                 case 2
                     set(hB0Edit,'Enable','off');
@@ -3499,7 +3504,7 @@ reset();
             set(hMode,'Enable','on');
             tempMode = get(hMode,'Value');
             switch tempMode
-                case 1
+                case {1,4}
                     set(hB0Edit,'Enable','on');
                     set(hNucleus,'Enable','on');
                     set(hExpDB0,'Enable','on');
@@ -3516,14 +3521,21 @@ reset();
                     set(hExpE1pEdit,'String','E1+ Filename(s)','FontAngle','italic');
                     clearInputFileSelection(6);
                     
-                    set(hExpE1m,'Enable','off');
-                    set(hExpE1mEdit,'String','E1- Filename(s)','FontAngle','italic');
-                    clearInputFileSelection(8);
+                    if tempMode == 4
+                        noiseControls = 'on';
+                    else
+                        noiseControls = 'off';
+                    end
+                    set(hExpE1m,'Enable',noiseControls);
+                    if tempMode == 1
+                        set(hExpE1mEdit,'String','E1- Filename(s)','FontAngle','italic');
+                        clearInputFileSelection(8);
+                    end
 
                     set(hNumIso,'Enable','on');
                     set(hCPU,'Enable','on');
                     set(hSignalGPU,'Enable','on');
-                    set(hNEX,'Enable','off');
+                    set(hNEX,'Enable',noiseControls);
 
                 case 2
                     set(hB0Edit,'Enable','off');
@@ -4189,7 +4201,7 @@ end
         logSetup('Mode set to %s.', getCurrentModeName());
         
         switch tempMode
-            case 1
+            case {1,4}
                 set(hRun,'String','Run','FontSize',12,'BackgroundColor',[0,1,0]);
                 set(hB0Edit,'Enable','on');
                 set(hNucleus,'Enable','on');
@@ -4203,12 +4215,17 @@ end
                 set(hExpB1m,'Enable','on');
                 set(hExpE1p,'Enable','off');
 
-                set(hExpE1m,'Enable','off');
+                if tempMode == 4
+                    noiseControls = 'on';
+                else
+                    noiseControls = 'off';
+                end
+                set(hExpE1m,'Enable',noiseControls);
                 
                 set(hNumIso,'Enable','on');
                 set(hCPU,'Enable','on');
                 set(hSignalGPU,'Enable','on');
-                set(hNEX,'Enable','off');
+                set(hNEX,'Enable',noiseControls);
 
             case 2
                 set(hRun,'String','Experimental SAR','FontSize',10, ...
@@ -4265,6 +4282,8 @@ end
         cd(addr);
         
         tempMode = get(hMode,'Value');
+        runSignal = ismember(tempMode,[1,4]);
+        runNoise = ismember(tempMode,[3,4]);
         studyName = get(hStudyName,'String');
         logSetup('Preparing %s run for study "%s".', getCurrentModeName(), studyName);
         queue = signalJobs(false);
@@ -4292,7 +4311,7 @@ end
             end
         end
 
-        if tempMode == 1 && ~signalBoxOverlapsFOV()
+        if runSignal && ~signalBoxOverlapsFOV()
             choice = questdlg(['The green FOV and red signal simulation box do not overlap. ' ...
                 'Match the signal box to the FOV before running?'], ...
                 'FOV Outside Signal Box','Match','Cancel','Match');
@@ -4307,7 +4326,7 @@ end
             end
         end
 
-        if tempMode == 1 || tempMode == 3
+        if runSignal || runNoise
             try
                 readTissuePropertyFile([inputCmd{2,1},inputCmd{2,2}],getCurrentNucleus());
             catch tissueError
@@ -4317,7 +4336,7 @@ end
             end
         end
 
-        if tempMode == 3 && strcmp(noiseLoading.Mode,'Full') && countInputFiles(8) < Rx.Num
+        if runNoise && strcmp(noiseLoading.Mode,'Full') && countInputFiles(8) < Rx.Num
             message = sprintf(['Full noise loading requires a supplied E1- map for each of %d ' ...
                 'receive channels; only %d map(s) are selected. Complete the ordered receive E-field list.'], ...
                 Rx.Num,countInputFiles(8));
@@ -4361,105 +4380,115 @@ end
 
         runInputs = struct('geometryFile', [inputCmd{1,1},inputCmd{1,2}], ...
             'tissueFile', [inputCmd{2,1},inputCmd{2,2}], 'sequenceFile', runSequenceFile);
-        switch tempMode
-            case 1
-                runType = 'Signal';
-                signalEngineExe = getSignalEngineExecutable();
-                executable = fullfile(engineRoot,signalEngineExe);
-                if exist(executable,'file') ~= 2
-                    warnSetup('Cannot run signal simulation: missing engine %s.', executable);
-                    errordlg(['Cannot find signal engine ',signalEngineExe,'.'],'modal');
-                    return
-                end
-                if isempty(inputCmd{12,1})
-                    warnSetup('Cannot run signal simulation: missing KSpace output filename.');
-                    errordlg('Please Specify kSpace Filename.','modal');
-                    return
-                end
-                if isempty(inputCmd{13,1})
-                    warnSetup('Cannot run signal simulation: missing KMap output filename.');
-                    errordlg('Please Specify kMap Filename.','modal');
-                    return
-                end
+        runTypes = {};
+        executables = {};
+        backends = {};
+        if runSignal
+            signalEngineExe = getSignalEngineExecutable();
+            executable = fullfile(engineRoot,signalEngineExe);
+            if exist(executable,'file') ~= 2
+                warnSetup('Cannot run signal simulation: missing engine %s.', executable);
+                errordlg(['Cannot find signal engine ',signalEngineExe,'.'],'modal');
+                return
+            end
+            if isempty(inputCmd{12,1})
+                warnSetup('Cannot run signal simulation: missing KSpace output filename.');
+                errordlg('Please Specify kSpace Filename.','modal');
+                return
+            end
+            if isempty(inputCmd{13,1})
+                warnSetup('Cannot run signal simulation: missing KMap output filename.');
+                errordlg('Please Specify kMap Filename.','modal');
+                return
+            end
 
-                runInputs.numIso = get(hNumIso,'String');
-                runInputs.threads = get(hCPU,'String');
-                runInputs.b0 = get(hB0Edit,'String');
-                runInputs.nucleus = getCurrentNucleus();
-                runInputs.deltaB0File = selectedProtocolFile(3);
-                runInputs.transmitB1Files = buildInputFileList(inputCmd{5,:});
-                runInputs.receiveB1Files = buildInputFileList(inputCmd{7,:});
-                runInputs.deltaGxFile = selectedProtocolFile(9);
-                runInputs.deltaGyFile = selectedProtocolFile(10);
-                runInputs.deltaGzFile = selectedProtocolFile(11);
-                runInputs.kSpaceFile = getStudyFilePath(runDir,studyName,'.ksig');
-                runInputs.kMapFile = getStudyFilePath(runDir,studyName,'.ktrj');
-                runInputs.xCenter = get(hXCtr,'String');
-                runInputs.yCenter = get(hYCtr,'String');
-                runInputs.zCenter = get(hZCtr,'String');
+            runInputs.numIso = get(hNumIso,'String');
+            runInputs.threads = get(hCPU,'String');
+            runInputs.b0 = get(hB0Edit,'String');
+            runInputs.nucleus = getCurrentNucleus();
+            runInputs.deltaB0File = selectedProtocolFile(3);
+            runInputs.transmitB1Files = buildInputFileList(inputCmd{5,:});
+            runInputs.receiveB1Files = buildInputFileList(inputCmd{7,:});
+            runInputs.deltaGxFile = selectedProtocolFile(9);
+            runInputs.deltaGyFile = selectedProtocolFile(10);
+            runInputs.deltaGzFile = selectedProtocolFile(11);
+            runInputs.kSpaceFile = getStudyFilePath(runDir,studyName,'.ksig');
+            runInputs.kMapFile = getStudyFilePath(runDir,studyName,'.ktrj');
+            runInputs.xCenter = get(hXCtr,'String');
+            runInputs.yCenter = get(hYCtr,'String');
+            runInputs.zCenter = get(hZCtr,'String');
+            runTypes{end+1} = 'Signal';
+            executables{end+1} = executable;
+            if get(hSignalGPU,'Value')
+                backends{end+1} = 'CUDA';
+            else
+                backends{end+1} = 'CPU';
+            end
+        end
+        if tempMode == 2
+            executable = sarEnginePath;
+            if isempty(inputCmd{5,1})
+                warnSetup('Cannot run SAR simulation: B1+ files are required.');
+                errordlg('Please Specify B1+ Filename(s).','modal');
+                return
+            end
+            if isempty(inputCmd{6,1})
+                warnSetup('Cannot run SAR simulation: E1+ files are required.');
+                errordlg('Please Specify E1+ Filename(s).','modal');
+                return
+            end
+            if isempty(inputCmd{15,1})
+                warnSetup('Cannot run SAR simulation: missing SAR output filename.');
+                errordlg('Please Specify SAR Filename.','modal');
+                return
+            end
 
-            case 2
-                runType = 'SAR';
-                executable = sarEnginePath;
-                if isempty(inputCmd{5,1})
-                    warnSetup('Cannot run SAR simulation: B1+ files are required.');
-                    errordlg('Please Specify B1+ Filename(s).','modal');
-                    return
-                end
-                if isempty(inputCmd{6,1})
-                    warnSetup('Cannot run SAR simulation: E1+ files are required.');
-                    errordlg('Please Specify E1+ Filename(s).','modal');
-                    return
-                end
-                if isempty(inputCmd{15,1})
-                    warnSetup('Cannot run SAR simulation: missing SAR output filename.');
-                    errordlg('Please Specify SAR Filename.','modal');
-                    return
-                end
+            runInputs.threads = get(hCPU,'String');
+            runInputs.transmitB1Files = buildInputFileList(inputCmd{5,:});
+            runInputs.transmitE1Files = buildInputFileList(inputCmd{6,:});
+            runInputs.receiveB1Files = buildInputFileList(inputCmd{7,:});
+            runInputs.sarFile = getStudyFilePath(runDir,studyName,'.sar');
+            runTypes{end+1} = 'SAR';
+            executables{end+1} = executable;
+            backends{end+1} = 'CPU';
+        end
+        if runNoise
+            executable = fullfile(engineRoot,'NutateNoise.exe');
+            if exist(executable,'file') ~= 2
+                warnSetup('Cannot run noise simulation: missing engine %s.', executable);
+                errordlg('Cannot find noise engine NutateNoise.exe.','modal');
+                return
+            end
+            noiseSeed = randi([0 double(intmax('uint32'))],1,1,'uint32');
+            runInputs.noiseSeed = sprintf('%u',noiseSeed);
+            if isempty(inputCmd{8,1})
+                warnSetup('Cannot run noise simulation: E1- files are required.');
+                errordlg('Please Specify E1- Filename(s).','modal');
+                return
+            end
+            if isempty(inputCmd{14,1})
+                warnSetup('Cannot run noise simulation: missing noise output filename.');
+                errordlg('Please Specify Noise Filename.','modal');
+                return
+            end
 
-                runInputs.threads = get(hCPU,'String');
-                runInputs.transmitB1Files = buildInputFileList(inputCmd{5,:});
-                runInputs.transmitE1Files = buildInputFileList(inputCmd{6,:});
-                runInputs.receiveB1Files = buildInputFileList(inputCmd{7,:});
-                runInputs.sarFile = getStudyFilePath(runDir,studyName,'.sar');
-
-            case 3
-                runType = 'Noise';
-                executable = fullfile(engineRoot,'NutateNoise.exe');
-                if exist(executable,'file') ~= 2
-                    warnSetup('Cannot run noise simulation: missing engine %s.', executable);
-                    errordlg('Cannot find noise engine NutateNoise.exe.','modal');
-                    return
-                end
-                noiseSeed = randi([0 double(intmax('uint32'))],1,1,'uint32');
-                runInputs.noiseSeed = sprintf('%u',noiseSeed);
-                if isempty(inputCmd{8,1})
-                    warnSetup('Cannot run noise simulation: E1- files are required.');
-                    errordlg('Please Specify E1- Filename(s).','modal');
-                    return
-                end
-                if isempty(inputCmd{14,1})
-                    warnSetup('Cannot run noise simulation: missing noise output filename.');
-                    errordlg('Please Specify Noise Filename.','modal');
-                    return
-                end
-
-                runInputs.nex = get(hNEX,'String');
-                runInputs.nucleus = getCurrentNucleus();
-                runInputs.receiveE1Files = buildInputFileList(inputCmd{8,:});
-                runInputs.noiseFile = getStudyFilePath(runDir,studyName,'.nois');
-                runInputs.noiseLoading = noiseLoading;
+            runInputs.nex = get(hNEX,'String');
+            runInputs.nucleus = getCurrentNucleus();
+            runInputs.receiveE1Files = buildInputFileList(inputCmd{8,:});
+            runInputs.noiseFile = getStudyFilePath(runDir,studyName,'.nois');
+            runInputs.noiseLoading = noiseLoading;
+            runTypes{end+1} = 'Noise';
+            executables{end+1} = executable;
+            backends{end+1} = 'CPU';
         end
 
-        if tempMode == 1 || tempMode == 2
+        if runSignal || tempMode == 2
             runInputs.sampleBounds = struct( ...
                 'xMin', get(hXMin,'String'), 'xMax', get(hXMax,'String'), ...
                 'yMin', get(hYMin,'String'), 'yMax', get(hYMax,'String'), ...
                 'zMin', get(hZMin,'String'), 'zMax', get(hZMax,'String'));
         end
-        [command, argumentText] = buildRunCommand(runType,executable,runInputs);
-
-        if tempMode == 3
+        if runNoise
             if strcmp(noiseLoading.Mode,'Full')
                 logSetup('Noise loading: full represented sample; independent of the signal box.');
             else
@@ -4470,33 +4499,51 @@ end
             end
         end
 
-        scriptName = ['run',runType];
-        scriptFile = [runDir,scriptName,'.bat'];
-        fid = fopen(scriptFile,'w');
-        fprintf(fid,'%s \n',command);
-        logSetup('Wrote run script: %s', scriptFile);
-        switch tempMode
-            case 1
-                logSetup('Signal outputs: k-space=%s, trajectory=%s', runInputs.kSpaceFile, runInputs.kMapFile);
-            case 2
-                logSetup('SAR output: %s', runInputs.sarFile);
-            case 3
-                logSetup('Noise output: %s, seed=%s', runInputs.noiseFile,runInputs.noiseSeed);
-        end
-        fclose(fid);
+        descriptors = struct('Study',{},'Backend',{},'Type',{},...
+            'Executable',{},'Arguments',{},'Directory',{});
+        for n = 1:numel(runTypes)
+            runType = runTypes{n};
+            executable = executables{n};
+            [command, argumentText] = buildRunCommand(runType,executable,runInputs);
+            scriptName = ['run',runType];
+            scriptFile = fullfile(runDir,[scriptName,'.bat']);
+            [fid,message] = fopen(scriptFile,'w');
+            if fid == -1
+                warnSetup('Run cancelled: could not write %s. %s',scriptFile,message);
+                errordlg(message,'Cannot Write Run Script','modal');
+                return;
+            end
+            bytesWritten = fprintf(fid,'%s \n',command);
+            closeStatus = fclose(fid);
+            if bytesWritten < numel(command)+2 || closeStatus ~= 0
+                warnSetup('Run cancelled: could not finish writing %s.',scriptFile);
+                errordlg(['Could not finish writing ',scriptFile,'.'],'Cannot Write Run Script','modal');
+                return;
+            end
+            logSetup('Wrote run script: %s', scriptFile);
 
-        cd(runDir);
+            switch runType
+                case 'Signal'
+                    logSetup('Signal outputs: k-space=%s, trajectory=%s', runInputs.kSpaceFile, runInputs.kMapFile);
+                case 'Noise'
+                    logSetup('Noise output: %s, seed=%s', runInputs.noiseFile,runInputs.noiseSeed);
+                case 'SAR'
+                    logSetup('SAR output: %s', runInputs.sarFile);
+            end
+            % Snapshot the exact batch arguments so Jobs uses no later Setup state.
+            descriptors(n) = struct('Study',studyName,'Backend',backends{n},'Type',runType,...
+                'Executable',executable,'Arguments',argumentText,'Directory',runDir);
+        end
 
         if tempMode ~= 2
-            backend = 'CPU';
-            if tempMode == 1 && get(hSignalGPU,'Value'),backend = 'CUDA';end
-            % Snapshot the exact batch arguments so Jobs uses no later Setup state.
-            descriptor = struct('Study',studyName,'Backend',backend,'Type',runType,...
-                'Executable',executable,'Arguments',argumentText,'Directory',runDir);
             queue = signalJobs();
-            id = queue.enqueue(descriptor);
-            logSetup('Queued %s job %d (%s). Outputs: %s',lower(runType),id,backend,runDir);
+            ids = queue.enqueue(descriptors);
+            for n = 1:numel(ids)
+                logSetup('Queued %s job %d (%s). Outputs: %s',...
+                    lower(runTypes{n}),ids(n),backends{n},runDir);
+            end
         else
+            cd(runDir);
             dos([scriptName,' &']);
             logSetup('Launched %s run. Watch MATLAB and engine output for completion or errors.', getCurrentModeName());
         end
@@ -5620,6 +5667,8 @@ end
         end
         if tempMode == 1
             runDir = createRunDirectory(studyDir,'_signal');
+        elseif tempMode == 4
+            runDir = createRunDirectory(studyDir,'_signal_noise');
         elseif isempty(activeRunDir) || ~strcmp(activeRunStudy,studyName) || ...
                 exist(activeRunDir,'dir') ~= 7 || ~runProtocolMatchesCurrent(activeRunDir,studyName)
             runDir = createRunDirectory(studyDir,'');

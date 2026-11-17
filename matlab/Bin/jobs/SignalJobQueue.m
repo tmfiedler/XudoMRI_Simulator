@@ -25,12 +25,24 @@ classdef SignalJobQueue < handle
             obj.Timer=timer('ExecutionMode','fixedSpacing','Period',.1,...
                 'BusyMode','drop','Name','SignalJobQueue','TimerFcn',@(~,~)obj.service());
         end
-        function id=enqueue(obj,descriptor)
-            assert(~obj.ownsDirectory(descriptor.Directory),'SignalQueue:Directory',...
+        function ids=enqueue(obj,descriptors)
+            % A combined run reserves its directory once and adds both jobs together.
+            directory=descriptors(1).Directory;
+            assert(~obj.ownsDirectory(directory),'SignalQueue:Directory',...
                 'That output folder already belongs to a queued or running job.');
+            if numel(descriptors)>1
+                assert(numel(descriptors)==2 && ...
+                    strcmp(obj.jobType(descriptors(1)),'Signal') && ...
+                    strcmp(obj.jobType(descriptors(2)),'Noise') && ...
+                    strcmpi(obj.directoryKey(directory),obj.directoryKey(descriptors(2).Directory)),...
+                    'SignalQueue:InvalidRun','Expected one Signal job followed by one Noise job in the same run folder.');
+            end
             state=signalProgressStatus('');state.Phase='queued';state.ExitCode=NaN;
-            obj.Jobs(end+1)=struct('Descriptor',descriptor,'State',state,'Process',[]);
-            id=numel(obj.Jobs);obj.Selected=id;obj.show();obj.refresh();
+            ids=numel(obj.Jobs)+(1:numel(descriptors));
+            for n=1:numel(ids)
+                obj.Jobs(ids(n))=struct('Descriptor',descriptors(n),'State',state,'Process',[]);
+            end
+            obj.Selected=ids(1);obj.show();
             if strcmp(obj.Timer.Running,'off'),start(obj.Timer);end
         end
         function show(obj)

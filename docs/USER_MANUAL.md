@@ -26,10 +26,9 @@ example in QUICK_START before preparing your own inputs.
 ## Protocols and files
 
 Each protocol lives under `protocols/<StudyName>/`. A protocol is the saved
-experiment setup: inputs, sequence settings, and output references. Signal and
-noise runs create separate `run_YYYYMMDD_HHMMSS_signal/` and
-`run_YYYYMMDD_HHMMSS_noise/` subfolders containing the results and a copy of
-the protocol and sequence.
+experiment setup: inputs, sequence settings, and output references. Runs
+save results and a copy of the protocol and sequence in a timestamped folder
+ending in `_signal`, `_noise` or `_signal_noise`.
 
 The files you normally work with are:
 
@@ -233,9 +232,9 @@ validation limits.
 | `NumIso` | Calculation points per model voxel along z; more points increase time/memory |
 | `CPU(s)` | Number of threads used for CPU runs |
 | `NEX` | Number of independent noise sets; disabled in Signal/SAR modes |
-| `Mode` | Signal, Noise, or SAR |
+| `Mode` | Signal, Noise, Signal + Noise, or SAR |
 | `GPU` | Checked: NVIDIA CUDA; unchecked: CPU. GPU execution fails if CUDA cannot run |
-| `Run` | Save a run and add the Signal or Noise simulation to the queue |
+| `Run` | Save a run and queue the simulations selected in Mode |
 | `Jobs` | Show the session's signal and noise queue, status and engine output |
 
 If sequence-driving state changed since `Gen. Seq.`, plotting or running asks
@@ -244,11 +243,16 @@ whether to regenerate and does not continue with stale sequence data.
 **Gen. Seq.** generates the RF pulses, gradients and acquisition timing from
 the current imaging settings and saves them as a `.seqn` file for simulation.
 
-In Signal or Noise mode, **Run** creates a run folder and queues the job in
-**Simulation jobs**. Jobs run one at a time. Setup becomes editable after
-preparation, so you can prepare and submit another study while a job runs.
-Each job saves its protocol and sequence; later GUI edits do not change them.
-Keep its geometry, tissue and field files unchanged until the job finishes.
+Select **Signal + Noise** in **Mode** and click **Run** to queue a Signal job
+followed by a Noise job. Both jobs use the same saved protocol and sequence
+in the `_signal_noise` folder. Signal and trajectory files are saved at the
+top level, and noise realizations are saved under `noiseSet<N>/`.
+The folder includes `runSignal.bat` and `runNoise.bat`.
+
+Jobs run one at a time. Setup becomes editable after preparation, so you can
+submit another study while a job runs. Later GUI edits do not change the saved
+protocol or sequence. Keep the referenced geometry, tissue and field files
+unchanged until the jobs finish.
 
 Select a row to **View output**, **Open run folder** or **Cancel job**.
 Cancellation retains any partial outputs; do not reconstruct them as complete.

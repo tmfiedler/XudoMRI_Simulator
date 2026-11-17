@@ -175,6 +175,8 @@ the session's serial `SignalJobQueue`; `SignalProcess` starts and monitors the
 native child. The queue captures settings and protocol/sequence copies while
 large model files remain referenced. Changing GUI settings does not rewrite a
 pending job, but changing its referenced input files can affect it.
+In Signal + Noise mode, Setup prepares both commands and submits them together.
+The queue reserves their shared run folder and tracks each engine as a separate job.
 
 `reformatter.m` provides an optional CST-to-input path. It matches material
 properties to IDs, samples geometry and H/E fields onto one common grid, and
