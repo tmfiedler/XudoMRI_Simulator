@@ -38,7 +38,7 @@ private:
 	std::vector<Voxel> geomData; // geomData is the object that will receive all voxels as they are imported from the file
 
 	// These two functions are called by the default constructor to read in the file's information.
-	bool readGeomHeader(CmdInterp cmdInterp);
+	bool readGeomHeader(const CmdInterp & cmdInterp);
 	bool readGeomData();
 
 public:

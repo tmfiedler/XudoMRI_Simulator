@@ -65,6 +65,8 @@ when their stored contract changes.
 
 ### Fixes
 
+- Fix the noise engine build with gzip input support.
+
 - Widened the Geometry Editor coordinate and slice-position fields and aligned
   the FOV dropdown with the adjacent inputs. The FOV controls leave more
   clearance beside the axial preview.

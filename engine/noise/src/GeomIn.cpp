@@ -83,7 +83,7 @@ GeomIn::~GeomIn()
 
 // ------------------------------------------------------------------------------
 
-bool GeomIn::readGeomHeader(CmdInterp cmdInterp)
+bool GeomIn::readGeomHeader(const CmdInterp & cmdInterp)
 {
 	std::fstream fHandle;
 	float buff;
