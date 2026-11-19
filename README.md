@@ -5,6 +5,30 @@ simulating its signal, and reconstructing an image. MATLAB provides the interfac
 native C++ engines simulate signal on CPU or NVIDIA GPU and generate receive
 noise.
 
+![XudoMRI Setup with acquisition controls and axial, sagittal, and coronal geometry previews](docs/assets/GUI_Screenshot.png)
+
+*XudoMRI Setup configured for a 3D radial acquisition.*
+
+## Features
+
+- **Multinuclear Bloch simulation** on CPU or NVIDIA CUDA GPUs. Add nuclei
+  through configuration using the available relaxation models and matching
+  tissue properties.
+- **Pulse sequence design** for Cartesian and 3D radial acquisitions, with
+  waveform and k-space previews and configurable scanner gradient limits.
+- **Custom model inputs** for voxel geometries, tissue properties, and
+  multichannel coil field maps, with slice views to inspect geometry and fields.
+  Adjust amplitude and phase independently on each transmit channel for RF
+  shimming.
+- **Sample-induced thermal noise** drawn as correlated complex Gaussian noise
+  across receive channels at each k-space sample. The covariance comes from
+  conductivity-weighted overlap of receive-coil electric fields, scaled by
+  sample temperature and acquisition bandwidth.
+- **Image reconstruction** with 2D Cartesian FFT and quick-look 3D radial
+  gridding, coil combination, k-space views, and radial SNR maps.
+- **Study management** in MATLAB with saved protocols, a simulation job queue,
+  and a bundled example study.
+
 ## Installation
 
 Download or clone this repository.

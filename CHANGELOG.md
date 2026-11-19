@@ -15,6 +15,11 @@ when their stored contract changes.
 
 ## Unreleased
 
+### Documentation
+
+- Add a README overview of simulation, acquisition, and reconstruction capabilities.
+- Show the MATLAB Setup interface in the README.
+
 ### Features
 
 - Add a Signal + Noise mode that queues two jobs in one run folder.
