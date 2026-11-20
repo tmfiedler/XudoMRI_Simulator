@@ -1,7 +1,10 @@
-function [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reconSize,fovMeters,logFcn)
+function [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reconSize,fovMeters,logFcn,densityAdaptedEdge)
 %PREPARERADIALTRAJECTORY Convert cycles/m to grid coordinates and density weights.
-    if nargin < 5
+    if nargin < 5 || isempty(logFcn)
         logFcn = @(varargin) [];
+    end
+    if nargin < 6
+        densityAdaptedEdge = [];
     end
     if ~isnumeric(fovMeters) || numel(fovMeters) ~= 3 || ...
             any(~isfinite(fovMeters(:))) || any(fovMeters(:) <= 0)
@@ -25,6 +28,9 @@ function [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reco
     % Use a spherical cutoff to keep the retained bandwidth isotropic.
     cutoff = reconSize / (2 * max(fovMeters));
     retained = radius <= cutoff;
+    if ~isempty(densityAdaptedEdge)
+        dcf = densityAdaptedWeights(radius,size(traj,1),retained,cutoff,densityAdaptedEdge);
+    end
     if maxRadius > cutoff
         trajectoryFlat = trajectoryFlat(retained,:);
         radius = radius(retained);
@@ -35,8 +41,10 @@ function [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reco
     if isempty(positiveRadius)
         error('RAD_3D:EmptyReconstructionBand','The reconstruction matrix is too small to retain any nonzero k-space samples.');
     end
-    minRadius = min(positiveRadius);
-    dcf = max(radiusNorm,minRadius/2).^2;
+    if isempty(densityAdaptedEdge)
+        minRadius = min(positiveRadius);
+        dcf = max(radiusNorm,minRadius/2).^2;
+    end
     dcf = dcf ./ max(dcf);
     coords = bsxfun(@times,trajectoryFlat,fovMeters) * (gridSize / reconSize);
     logFcn('Exported k-space origin=[0 0 0] maxRadius=%g trajectoryFlat=%s',...
@@ -50,4 +58,24 @@ function [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reco
     info.retainedSampleCount = numel(radius);
     info.fovMeters = fovMeters;
     info.voxelSizeMeters = fovMeters / reconSize;
+end
+
+function dcf = densityAdaptedWeights(radius,samplesPerSpoke,retained,cutoff,kEdge)
+    validateattributes(kEdge,{'numeric'},{'scalar','real','finite','positive'});
+    radii = reshape(double(radius)/kEdge,samplesPerSpoke,[]);
+    if any(diff(radii,1,1)<=0,'all') || any(radii(end,:)>1)
+        error('DA_3DPR:InvalidTrajectory', ...
+            ['DA-3DPR radii must increase along each spoke and stay within the nominal outer radius. ' ...
+             'Check that the trajectory and protocol match.']);
+    end
+
+    % Equal solid angles cancel in normalization. In the ideal taper k^3
+    % is linear in time, so averaging neighboring cubes gives the bin edge.
+    volumeCoordinate = radii.^3;
+    interior = (volumeCoordinate(1:end-1,:)+volumeCoordinate(2:end,:))/2;
+    lower = [zeros(1,size(radii,2));interior];
+    upper = [interior;ones(1,size(radii,2))];
+    upper = upper(:);
+    lower = lower(:);
+    dcf = min(upper(retained),min(1,cutoff/kEdge)^3)-lower(retained);
 end

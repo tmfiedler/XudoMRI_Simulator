@@ -125,19 +125,19 @@ Regenerate the sequence after changing the Cartesian prescription.
 | --- | --- |
 | `B0(T)` | Main field strength in Tesla |
 | `Nuc.` | Nucleus ID from `config/nuclei.yaml`; supplied entries are `1H` and `23Na` |
-| `Seq.` | `GRE`, `SE`, `GRE_EPI`, or `RAD_3D` |
+| `Seq.` | `GRE`, `SE`, `GRE_EPI`, `RAD_3D`, or `DA_3DPR` |
 | `RF Shape` | Sinc, rectangular, or Gaussian envelope |
 | `RF Pulse Dur. (ms)` | RF duration |
 | `# Pts in RF Pulse` | RF sample count; default 512, user-editable |
 | `B1+ (uT)` | Optional target transmit field; requires a matching shim reference for positive targets |
 | `RF FA` | Nominal flip angle in degrees; editing it sets target B1+. Also controls SE relative refocusing strength |
 | `TI(ms)` | Disabled; inversion preparation is not implemented |
-| `FOV (mm)` | Image extent along FE/PE; isotropic volume extent for `RAD_3D` |
+| `FOV (mm)` | Image extent along FE/PE; isotropic volume extent for both radial sequences |
 | `Slice Thick.` | Nominal Cartesian slice thickness in mm, set in the Geometry Editor |
 | `MatSize` | Cartesian FE/PE pixel counts; radial samples per spoke / number of spokes |
 | `Rcvr BW (kHz)` | Receiver bandwidth |
-| `Scanner` | Gradient profile for GRE, SE, GRE_EPI and RAD_3D. `None` uses rectangular gradients. `Generic` uses 22 mT/m and 120 T/m/s per physical axis with 10 µs ramp steps. |
-| `Gradient ON` | Enable Cartesian SS/PE/FE axes; all three logical z/y/x axes are checked and locked for `RAD_3D` |
+| `Scanner` | DA-3DPR requires a gradient profile. For the other sequences, `None` uses rectangular gradients. `Generic` uses 22 mT/m and 120 T/m/s per physical axis with 10 µs ramp steps. |
+| `Gradient ON` | Enable Cartesian SS/PE/FE axes; all three logical z/y/x axes are checked and locked for both radial sequences |
 | `TE`, `TR` | Echo and repetition times in milliseconds |
 | `#Dummy TRs` | Excitations before recorded acquisition |
 | `PE Direction` | Cartesian phase-encode axis and polarity |
@@ -213,8 +213,7 @@ and retains the same acquisition bandwidth. Clear the field and press Enter
 to return to the default. A smaller matrix can limit the reconstructed
 bandwidth.
 
-All generators use idealized gradients without enforcing scanner amplitude or
-slew-rate limits. Setup raises TE/TR requests below the sequence minimums.
+Setup raises TE/TR requests below the sequence minimums.
 For GRE, SE and GRE_EPI, **Plot Seq.** shows a 2D k-space preview alongside
 the waveform. Dots mark the ADC samples, and lines show the nominal in-plane
 gradient path, including ramps, prephasers and EPI blips. The path breaks
@@ -224,6 +223,22 @@ Use **Plot Seq.** to inspect the generated RF, gradients and acquisition windows
 large radial studies show a representative spoke subset. See
 [scientific methods](SCIENTIFIC_METHODS.md) for numerical conventions and
 validation limits.
+
+### DA-3DPR
+
+Select `DA_3DPR` and choose a scanner profile. The sequence samples during
+the gradient ramp and starts density adaptation at **t₀ (ms)**, measured
+from ADC onset. Leave the field blank to use the earliest feasible transition
+automatically. Enter zero or a value below that minimum to show the calculated
+minimum in the field. The tooltip shows the current minimum. The protocol
+saves the displayed value. Values at or
+beyond the end of the readout are invalid. For an infeasible prescription, try
+more samples at the same bandwidth, a lower bandwidth, or a coarser
+acquisition resolution. The sequence preview shows the variable k-space
+spacing and the signal engine exports the acquired trajectory.
+Load the resulting receiver files in Reco with their matching `.prot` and
+`.ktrj`. Reco weights DA-3DPR samples by estimated shell volume before
+gridding. It uses the same matrix and receive-channel controls as RAD_3D.
 
 ## Running an engine
 

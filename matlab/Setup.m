@@ -714,9 +714,12 @@ hTR = uicontrol(hMain,'Style','edit','String','500',...
 hTILabel = uicontrol(hMain,'Style','text','string','TI (ms)',...
     'Position',[imagingX+176 imagingRowY(3)+tallLabelOffset 46 tallLabelHeight],...
     'BackgroundColor',[1,1,1],'Enable','off');
+inversionTimeText = '10';
+radialTransitionText = '';
+transitionTooltip = 'Time from ADC onset to the gradient taper.';
 hTI = uicontrol(hMain,'Style','edit',...
     'String','10',...
-    'Position',[imagingX+222 imagingRowY(3) 28 20],...
+    'Position',[imagingX+222 imagingRowY(3) 35 20],...
     'BackgroundColor',[1,1,1],'BusyAction','cancel','Enable','off',...
     'Callback',{@TI_Duration_Callback,''});
 
@@ -935,14 +938,20 @@ reset();
     end
 
     %% --- Executes on StudyLoad button.
-    function StudyLoad_Callback(source,eventdata)
+    function StudyLoad_Callback(source,eventdata,protocolFile)
         global geoData;
         global inputInfo;
         global displayInfo;
         
-        [fileName,pathName] = uigetfile( ...
-            {'*.prot','Protocol File (*.prot)';'*.*','All Files (*.*)'}, ...
-            'OPEN: Protocol File',fullfile(protocolRoot,'*.prot'));
+        if nargin < 3
+            [fileName,pathName] = uigetfile( ...
+                {'*.prot','Protocol File (*.prot)';'*.*','All Files (*.*)'}, ...
+                'OPEN: Protocol File',fullfile(protocolRoot,'*.prot'));
+        else
+            [pathName,name,extension] = fileparts(protocolFile);
+            pathName = [pathName,filesep];
+            fileName = [name,extension];
+        end
 
         if ~isequal(fileName,0)
             [~,~,extension] = fileparts(fileName);
@@ -1194,7 +1203,13 @@ reset();
             if is3DRadSequenceName(getCurrentSequenceName())
                 setRadialResolutionText(protocol.radialResolutionText());
             end
-            TI_Duration_Callback(source,eventdata,protocol.inversionTimeText());
+            inversionTimeText = protocol.inversionTimeText();
+            radialTransitionText = '';
+            if strcmp(getCurrentSequenceName(),'DA_3DPR')
+                radialTransitionText = strtrim(protocol.radialTransitionText());
+                parseRadialTransitionMs(radialTransitionText);
+            end
+            updateSequenceSpecificFieldLabels();
             % Legacy protocols may contain a saved Filter state. Match is now
             % an explicit one-shot action, so loading a protocol should not
             % change the saved simulation range.
@@ -1239,7 +1254,7 @@ reset();
             updateReadoutTooltips();
             slice = readSequenceSlice(inputInfo);
             if radialAxesRestored || (~protocol.hasUnifiedFOV && slice.offset ~= 0) || ...
-                    (~isempty(scannerProfile) && ~restoredPreview)
+                    ((~isempty(scannerProfile) || strcmp(getCurrentSequenceName(),'DA_3DPR')) && ~restoredPreview)
                 markSequenceDirty();
             else
                 markSequenceClean();
@@ -1360,7 +1375,8 @@ reset();
         protocol.targetB1Text = get(hTargetB1,'String');
         protocol.adcFrequencyText = get(hADC_Freq,'String');
         protocol.radialResolutionText = get(hRadialResolution,'String');
-        protocol.inversionTimeText = get(hTI,'String');
+        protocol.inversionTimeText = inversionTimeText;
+        protocol.radialTransitionText = radialTransitionText;
         protocol.teText = get(hTE,'String');
         protocol.trText = get(hTR,'String');
         protocol.dummyCountText = get(hDummyNum,'String');
@@ -2712,12 +2728,15 @@ reset();
     function updateSequenceSpecificFieldLabels()
         updateScannerControl();
         updateRadialAxisControls();
-        if sequenceUsesTI(getCurrentSequenceName()) && strcmpi(get(hSeqType,'Enable'),'on')
-            set(hTILabel,'Enable','on');
-            set(hTI,'Enable','on');
+        sequenceName = getCurrentSequenceName();
+        if strcmp(sequenceName,'DA_3DPR')
+            controlState = get(hSeqType,'Enable');
+            set(hTILabel,'String','t₀ (ms)','Enable',controlState);
+            set(hTI,'String',radialTransitionText,'Enable',controlState, ...
+                'TooltipString',transitionTooltip);
         else
-            set(hTILabel,'Enable','off');
-            set(hTI,'Enable','off');
+            set(hTILabel,'String','TI (ms)','Enable','off');
+            set(hTI,'String',inversionTimeText,'Enable','off','TooltipString','');
         end
 
         if is3DRadSequenceName(getCurrentSequenceName())
@@ -2802,13 +2821,6 @@ reset();
     function tf = is3DRadSequenceName(sequenceName)
         normalizedName = strtrim(sequenceName);
         tf = usesRadial3DWorkflow(normalizedName);
-    end
-
-    function tf = sequenceUsesTI(sequenceName)
-        % Add a sequence here only when its waveform contains an inversion
-        % pulse whose timing is controlled by the TI input.
-        inversionTimeSequences = {};
-        tf = any(strcmpi(strtrim(sequenceName),inversionTimeSequences));
     end
 
     function sequenceName = normalizeSequenceDisplayName(sequenceName)
@@ -2987,22 +2999,17 @@ reset();
     end
 
     %% --- Executes on hTI_Duration_Editbox.
-    function TI_Duration_Callback(source,eventdata,flag)
-        if strcmp(flag,'')==1
-            temp = str2double(get(hTI,'String'));
-            if ~isnan(temp)
-                if abs(temp) ~= 0
-                    set(hTI,'String',num2str(abs(temp)));
-                else
-                    set(hTI,'String','10');
-                end;
-            else
-                set(hTI,'String','10');
-            end;
-            updateSeq();
-        else
-            set(hTI,'String',flag);
-        end;
+    function TI_Duration_Callback(source,~,~)
+        try
+            transitionText = strtrim(get(source,'String'));
+            parseRadialTransitionMs(transitionText);
+        catch exception
+            set(source,'String',radialTransitionText);
+            errordlg(exception.message,'DA-3DPR transition time');
+            return;
+        end
+        radialTransitionText = transitionText;
+        updateSeq();
     end
 %% --- Executes on Match button.
     function Match_Callback(source,eventdata,flag) %#ok<INUSD>
@@ -3262,7 +3269,7 @@ reset();
             setRadialResolutionText(get(source,'String'));
         catch ME
             set(source,'String',get(source,'UserData'));
-            errordlg(ME.message,'RAD_3D acquisition resolution');
+            errordlg(ME.message,'Radial acquisition resolution');
             return;
         end
         updateSeq();
@@ -3276,6 +3283,10 @@ reset();
 
     function resetRadialResolutionControls()
         set(hRadialResolution,'String','','UserData','');
+        inversionTimeText = '10';
+        radialTransitionText = '';
+        set(hTILabel,'String','TI (ms)','Enable','off');
+        set(hTI,'String',inversionTimeText,'Enable','off','TooltipString','');
         set([hRadialResolutionLabel,hRadialResolution],'Visible','off');
         set([hPEDirectLabel,hPEDirectMenu],'Visible','on');
     end
@@ -3424,8 +3435,11 @@ reset();
     function SeqGen_Callback(source,eventdata) %#ok<INUSD,INUSD>
         global inputInfo displayInfo;
         updateRadialAxisControls();
-        if strcmp(getCurrentSequenceName(),'SE') || ~isempty(scannerProfile)
-            updateSeq(); % Loaded short-timing protocols use the corrected limits.
+        sequenceName = getCurrentSequenceName();
+        if strcmp(sequenceName,'SE') || strcmp(sequenceName,'DA_3DPR') || ~isempty(scannerProfile)
+            if ~updateSeq() % Loaded protocols use the current timing limits.
+                return;
+            end
         end
                 
         cd(addr);
@@ -3455,8 +3469,7 @@ reset();
             set(hRx,'Enable','off');
             
             settings = readSequenceControls();
-            TI.duration = str2double(get(hTI,'String')); % ms
-            sequenceName = getCurrentSequenceName();
+            TI.duration = str2double(inversionTimeText); % ms
             isRadial3D = is3DRadSequenceName(sequenceName);
             if isRadial3D
                 peDirection = {'P--A'};
@@ -3850,9 +3863,18 @@ function handled = plotExcitationPreview(interSeqData,defaultNex)
     plotData.Gss = normalizeSequenceTrace(interSeqData.Main.Gss.value(1:endIdx));
     plotData.Gpe = normalizeSequenceTrace(interSeqData.Main.Gpe.value(1:endIdx));
     plotData.Gfe = normalizeSequenceTrace(interSeqData.Main.Gfe.value(1:endIdx));
-    plotData.ADC = interSeqData.Main.ADC.value(1:endIdx);
-
     tAxis = [0, cumsum(plotData.tStep)];
+    adc = interSeqData.Main.ADC;
+    if isequal(interSeqData.Main.RF.tStep,adc.tStep)
+        lastAdc = endIdx;
+    else
+        resetRows = find(adc.value == -1);
+        lastAdc = numel(adc.tStep);
+        if nex < numel(resetRows)
+            lastAdc = resetRows(nex+1)-1;
+        end
+    end
+    adcAxis = [0,cumsum(adc.tStep(1:lastAdc))];
     timeMax = max(tAxis(end),eps) * 5/4;
 
     sliceLabel = 'SS';
@@ -3891,7 +3913,7 @@ function handled = plotExcitationPreview(interSeqData,defaultNex)
     plotSequenceTrace(tAxis,plotData.Gss,9.2,[0 125 197]/255);
     plotSequenceTrace(tAxis,plotData.Gpe,6.6,[237 24 73]/255);
     plotSequenceTrace(tAxis,plotData.Gfe,4,[0 169 79]/255);
-    plotADCTrace(tAxis,plotData.ADC);
+    plotADCTrace(adcAxis,adc.value(1:lastAdc));
     if isfield(interSeqData.Plot,'excitationCount')
         title(sprintf('Pulse Sequence Diagram (first %d of %d excitations)',...
             nex,interSeqData.Plot.excitationCount));
@@ -3931,7 +3953,11 @@ function plotKspacePreview3D(hAxes,kspacePreview)
     end
 
     samplesPerSpoke = kspacePreview.samplesPerSpoke;
-    radii = ((1:samplesPerSpoke)' - 0.5) * (kspacePreview.kEdge / samplesPerSpoke);
+    if isfield(kspacePreview,'sampleRadii')
+        radii = kspacePreview.sampleRadii(:);
+    else
+        radii = ((1:samplesPerSpoke)' - 0.5) * (kspacePreview.kEdge / samplesPerSpoke);
+    end
     spokeColors = lines(max(numPreview,1));
 
     cla(hAxes);
@@ -4562,8 +4588,9 @@ end
     end
 
     %% Shared state and sequence helpers
-    function updateSeq()
+    function valid = updateSeq()
         global inputInfo;
+        valid = false;
         updateRadialAxisControls();
         
         tempAddr = addr;
@@ -4583,12 +4610,33 @@ end
         sequenceIndex = get(hSeqType,'Value');
         sequenceNames = get(hSeqType,'String');
         sequenceName = sequenceNames{sequenceIndex};
-        TI.duration = str2double(get(hTI,'String'));
+        TI.duration = str2double(inversionTimeText);
         TI.handle = hTI;
-        if ~isempty(scannerProfile)
+        densityAdapted = strcmp(sequenceName,'DA_3DPR');
+        if ~isempty(scannerProfile) && ~densityAdapted
             settings = applyScannerBounds(settings,slice);
         end
-        [minTE,minTR] = dispatchSequence(sequenceName,sequenceIndex,settings,slice,TI);
+        try
+            if densityAdapted
+                [minTE,minTR,~,effectiveT0] = dispatchSequence(sequenceName,sequenceIndex,settings,slice,TI);
+                requestedT0 = settings.ADC.radialTransitionMs;
+                if ~isempty(requestedT0) && requestedT0 < effectiveT0
+                    radialTransitionText = sprintf('%.17g',effectiveT0);
+                    settings.ADC.radialTransitionMs = effectiveT0;
+                    set(hTI,'String',radialTransitionText);
+                end
+            else
+                [minTE,minTR] = dispatchSequence(sequenceName,sequenceIndex,settings,slice,TI);
+            end
+        catch exception
+            if ~startsWith(exception.identifier,'DA_3DPR:')
+                rethrow(exception);
+            end
+            markSequenceDirty();
+            updateReadoutTooltips();
+            errordlg(exception.message,'DA-3DPR readout');
+            return;
+        end
 
         if strcmp(sequenceName,'SE') || ~isempty(scannerProfile)
             % Round limits upward; recompute TR for the TE actually displayed.
@@ -4612,6 +4660,7 @@ end
         updateReadoutTooltips();
         updateTargetFlipAngleDisplay();
         markSequenceDirty();
+        valid = true;
 
         cd(tempAddr);
     end
@@ -4633,12 +4682,17 @@ end
         bwTip = '';
         teTip = '';
         trTip = '';
+        t0Tip = '';
+        sequenceName = getCurrentSequenceName();
+        densityAdapted = strcmp(sequenceName,'DA_3DPR');
+        if densityAdapted
+            t0Tip = transitionTooltip;
+        end
         if strcmp(get(hSeqType,'Enable'),'on')
             settings = readSequenceControls();
             bandwidth = settings.ADC.BW; % kHz
             samples = settings.MatSize(1);
             if isreal(bandwidth) && isfinite(bandwidth) && bandwidth > 0
-                sequenceName = getCurrentSequenceName();
                 readout = 'line';
                 if is3DRadSequenceName(sequenceName)
                     readout = 'spoke';
@@ -4649,14 +4703,23 @@ end
                 % Use the displayed TE for the TR limit. Omit the TI control
                 % so this timing query leaves protocol settings untouched.
                 slice = readSequenceSlice(inputInfo);
-                if ~isempty(scannerProfile) && settings.GradOn.fe
+                if ~isempty(scannerProfile) && settings.GradOn.fe && ~densityAdapted
                     maxBW = scannerBounds(settings,slice);
                     bwTip = sprintf('%s\nScanner maximum: %.6g kHz.',bwTip,maxBW);
                 end
                 try
-                    [minTE,minTR] = dispatchSequence(sequenceName,get(hSeqType,'Value'),settings,slice,[]);
+                    sequenceIndex = get(hSeqType,'Value');
+                    if densityAdapted
+                        automatic = settings;
+                        automatic.ADC.radialTransitionMs = [];
+                        [minTE,minTR,~,minT0] = dispatchSequence(sequenceName,sequenceIndex,automatic,slice,[]);
+                        t0Tip = sprintf('%s\nMinimum t₀: %.6g ms.',transitionTooltip,minT0);
+                    end
+                    if ~densityAdapted || ~isempty(settings.ADC.radialTransitionMs)
+                        [minTE,minTR] = dispatchSequence(sequenceName,sequenceIndex,settings,slice,[]);
+                    end
                 catch exception
-                    if isempty(scannerProfile)
+                    if isempty(scannerProfile) && ~startsWith(exception.identifier,'DA_3DPR:')
                         rethrow(exception);
                     end
                     bwTip = sprintf('%s\n%s',bwTip,exception.message);
@@ -4674,6 +4737,7 @@ end
         set([hADCLabel,hADC_Freq],'TooltipString',bwTip);
         set([hTELabel,hTE],'TooltipString',teTip);
         set([hTRLabel,hTR],'TooltipString',trTip);
+        set(hTI,'TooltipString',t0Tip);
     end
 
     function settings = readSequenceControls()
@@ -4688,6 +4752,9 @@ end
         settings.ADC.BW = str2double(get(hADC_Freq,'String')); % kHz
         if is3DRadSequenceName(getCurrentSequenceName())
             settings.ADC.radialResolutionMm = parseRadialResolutionMm(get(hRadialResolution,'String'));
+        end
+        if strcmp(getCurrentSequenceName(),'DA_3DPR')
+            settings.ADC.radialTransitionMs = parseRadialTransitionMs(radialTransitionText);
         end
         settings.GradOn.ss = get(hSS,'Value');
         settings.GradOn.fe = get(hFE,'Value');
@@ -4753,7 +4820,7 @@ end
     end
 
     function supported = supportsScannerProfile(sequenceName)
-        supported = any(strcmp(sequenceName,{'GRE','SE','GRE_EPI','RAD_3D'}));
+        supported = any(strcmp(sequenceName,{'GRE','SE','GRE_EPI','RAD_3D','DA_3DPR'}));
     end
 
     function [maxBW,minRF] = scannerBounds(settings,slice)
@@ -5642,7 +5709,7 @@ end
         tempAddr = addr;
         try
             settings = readSequenceControls();
-            TI.duration = str2double(get(hTI,'String'));
+            TI.duration = str2double(inversionTimeText);
             slice = readSequenceSlice(inputInfo);
             sequenceIndex = get(hSeqType,'Value');
             sequenceNames = get(hSeqType,'String');

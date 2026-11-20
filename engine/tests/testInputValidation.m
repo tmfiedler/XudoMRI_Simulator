@@ -29,6 +29,11 @@ for row={'1 fprintf(''UNSAFE_PROTOCOL_EXPRESSION'')','[1 0]','1+1 0', ...
 end
 p=readSetupProtocol(fullfile(repo,'protocols','example','example.prot'));
 assert(isequal(p.txWeight(1),[10 0]),'Bundled protocol weights changed.');
+assert(isempty(parseRadialTransitionMs('')) && parseRadialTransitionMs('0')==0 && ...
+    parseRadialTransitionMs('0.3')==0.3,'DA-3DPR transition parsing changed.');
+for badTransition = {'-1','0,3','NaN','Inf','1+1'}
+    expectError(@()parseRadialTransitionMs(badTransition{1}),'DA_3DPR:InvalidTransition');
+end
 fprintf('PASS protocol numeric parsing and expression rejection\n');
 
 % Three original records; the crop below selects record 2, not record 1.

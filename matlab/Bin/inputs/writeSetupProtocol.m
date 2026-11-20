@@ -5,6 +5,11 @@ hasRadialResolution = usesRadial3DWorkflow(protocol.sequenceType) && ...
 if hasRadialResolution
     parseRadialResolutionMm(protocol.radialResolutionText);
 end
+hasRadialTransition = strcmp(protocol.sequenceType,'DA_3DPR') && ...
+    isfield(protocol,'radialTransitionText') && ~isempty(strtrim(protocol.radialTransitionText));
+if hasRadialTransition
+    parseRadialTransitionMs(protocol.radialTransitionText);
+end
 fid = fopen(filename,'w');
 if fid >= 0
     cleanup = onCleanup(@() fclose(fid)); %#ok<NASGU>
@@ -68,6 +73,9 @@ writeField('MatSize:',num2str(protocol.matrixSize));
 writeField('ADC Freq(kHz):',protocol.adcFrequencyText);
 if hasRadialResolution
     writeField('Radial Acquisition Resolution(mm):',protocol.radialResolutionText);
+end
+if hasRadialTransition
+    writeField('DA-3DPR Transition Time(ms):',protocol.radialTransitionText);
 end
 writeField('TI_Duration(ms):',protocol.inversionTimeText);
 fprintf(fid,'  Gradient ON:\n');

@@ -12,7 +12,7 @@ function varargout = SeqInterfaceOut(tempStr,tempNum,TE,TR,MatSize,FOV,RF,ADC,Gr
     elseif nargout == 1
         varargout{1} = sequenceFn(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus);
     else
-        if strcmpi(tempStr,'RAD_3D')
+        if usesRadial3DWorkflow(tempStr)
             [minTE,minTR,minTI] = sequenceFn(TE,TR,MatSize,FOV,RF,ADC,GradOn,dummy,slice,nucleus);
             varargout{3} = minTI;
             if isstruct(TI) && isfield(TI,'handle') && str2double(get(TI.handle,'String')) < minTI

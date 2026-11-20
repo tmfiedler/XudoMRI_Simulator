@@ -400,11 +400,19 @@ the protocol; relative paths are first resolved against MATLAB's current
 folder. Output paths are rebased to the loaded protocol folder. Keep each run's
 protocol with its outputs so later settings changes do not obscure their meaning.
 
-For `RAD_3D`, the optional label `Radial Acquisition Resolution(mm):` precedes
-a positive scalar in mm. Setup omits the label when the field is blank. An
-absent label selects the original readout gradient and a default reconstruction
-matrix with side length equal to samples per spoke. The `.seqn` and
-`.ktrj` layouts are unchanged.
+For `RAD_3D` and `DA_3DPR`, the optional label
+`Radial Acquisition Resolution(mm):` precedes a positive scalar in mm.
+Setup omits the label when the field is blank. An absent label derives
+the nominal outer radius from the FOV and sample count. For `RAD_3D`,
+the default reconstruction matrix then has side length equal to samples per
+spoke. The `.seqn` and `.ktrj` layouts are unchanged.
+
+For `DA_3DPR`, the optional label `DA-3DPR Transition Time(ms):` also
+precedes `TI_Duration(ms):`. It stores the time from ADC onset to the start
+of the gradient taper. Its absence selects automatic timing. Setup saves
+the calculated minimum when an explicit value is raised to it. DA-3DPR
+requires the saved scanner profile and gradient limits to regenerate the
+readout.
 
 Readers/writer: [readSetupProtocol.m](../matlab/Bin/inputs/readSetupProtocol.m),
 [writeSetupProtocol.m](../matlab/Bin/inputs/writeSetupProtocol.m) and the

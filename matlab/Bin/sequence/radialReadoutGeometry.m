@@ -6,6 +6,9 @@ if isfield(adc,'radialResolutionMm') && ~isempty(adc.radialResolutionMm)
 else
     kEdge = matrixSize(1)*500/max([fov(:);1]);
 end
+if nargout < 2
+    return;
+end
 count = matrixSize(end);
 index = (0:count-1)';
 z = -1+2*(index+0.5)/count;

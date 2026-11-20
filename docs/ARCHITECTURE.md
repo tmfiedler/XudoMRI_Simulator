@@ -37,7 +37,7 @@ Reconstruction needs the matching `.prot` to interpret the acquired data.
 | Location | Responsibility |
 | --- | --- |
 | `matlab/` | Entry points: `Setup.m`, `reformatter.m`, `reco.m` |
-| `matlab/Sequences/` | GRE, SE, GRE_EPI and RAD_3D waveform generators |
+| `matlab/Sequences/` | GRE, SE, GRE_EPI, RAD_3D and DA_3DPR waveform generators |
 | `matlab/Bin/` | Helpers grouped into `inputs`, `nucleus`, `sequence`, `jobs`, `gui` and `reconstruction` |
 | `engine/signal/` | Signal model, host runner and CUDA implementation |
 | `engine/noise/` | Receive-noise covariance and random sampling |
@@ -241,7 +241,9 @@ and uses the same ADC offsets and reset events as the engine trajectory.
 optional Dummy blocks. RF, carrier, logical FE/PE/SS gradients and ADC events
 have their own timelines. `Bin/sequence/combineSeqRect.m` merges those clocks,
 maps logical axes to physical x/y/z and preserves original ADC observations.
-RAD_3D retains its logical radial axes. Setup's `expSeq` applies complex Tx
+RAD_3D and DA_3DPR retain their logical radial axes. The generators share
+spoke assembly in `buildRadialSpokeSequence.m`. DA_3DPR keeps the gradient
+raster and original ADC windows on separate clocks. Setup's `expSeq` applies complex Tx
 weights and writes the native loop-encoded `.seqn`. Transmit channels can have
 different weights, but share one carrier waveform.
 
@@ -269,7 +271,9 @@ Cartesian reconstruction restores sequence-specific line order and saved
 orientation, then Fourier-transforms each channel. Its trajectory viewer reads
 the matching `.ktrj` on demand and groups samples by the protocol readout size
 in acquisition order. Radial reconstruction uses
-exported `.ktrj` coordinates and physical FOV, grids each channel and applies
+exported `.ktrj` coordinates and physical FOV. For DA_3DPR, the protocol
+also supplies the nominal outer radius for finite-shell density weights.
+The reconstruction grids each channel and applies
 the Fourier/deapodization/normalization steps. Coil combinations are formed
 from the reconstructed channels. Radial output is a quick-look volume; numerical
 conventions are in [the method reference](SCIENTIFIC_METHODS.md#3d-radial-images).

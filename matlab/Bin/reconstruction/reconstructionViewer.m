@@ -411,7 +411,10 @@ function loadSelectedSignalData(hFig,selectedFiles,dataPath)
         traj = reshapeTrajectoryData(trajFlat,samplesPerSpoke,numSpokes);
         logRadialReco('Reshaped trajectory size: %s',reconstructionSizeString(traj));
 
-        warningText = validateCenterOutTrajectory(traj);
+        warningText = '';
+        if samplesPerSpoke > 1 || ~strcmpi(protocol.SequenceType,'DA_3DPR')
+            warningText = validateCenterOutTrajectory(traj);
+        end
         if ~isempty(warningText)
             logRadialReco('Trajectory warning: %s',strrep(warningText,sprintf('\n'),' | '));
             warndlg(warningText,'Trajectory Warning','modal');
@@ -799,7 +802,13 @@ function [state,reconContext] = getReconstructionContext(state)
     end
 
     fovMeters = radialFOVMeters(state.protocol.FOV);
-    reconContext = buildRadialReconstructionContext(state.trajectory,state.reconSize,fovMeters,@logRadialReco);
+    densityAdaptedEdge = [];
+    if strcmpi(state.protocol.SequenceType,'DA_3DPR')
+        adc = struct('radialResolutionMm',state.protocol.RadialResolutionMm);
+        densityAdaptedEdge = radialReadoutGeometry(state.samplesPerSpoke,state.protocol.FOV,adc);
+    end
+    reconContext = buildRadialReconstructionContext(state.trajectory,state.reconSize, ...
+        fovMeters,@logRadialReco,densityAdaptedEdge);
     state.reconContext = reconContext;
 end
 
@@ -1723,6 +1732,11 @@ function [samplesPerSpoke,numSpokes] = inferRadialDimensions(protocol,totalSampl
     logRadialReco('Inferring dimensions from MatSize=%s totalSamples=%d',mat2str(matSize),totalSamples);
 
     samplesPerSpoke = max(1,round(matSize(1)));
+    if strcmpi(protocol.SequenceType,'DA_3DPR')
+        numSpokes = max(1,round(matSize(end)));
+        validateSpokeCount(totalSamples,samplesPerSpoke,numSpokes,'DA-3DPR');
+        return;
+    end
     if mod(totalSamples,samplesPerSpoke) ~= 0
         if numel(matSize) > 1 && mod(totalSamples,max(1,round(matSize(2)))) == 0
             samplesPerSpoke = max(1,round(matSize(2)));

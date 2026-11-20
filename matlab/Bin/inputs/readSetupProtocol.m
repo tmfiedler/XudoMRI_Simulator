@@ -70,6 +70,7 @@ for k = 1:size(fields,1)
 end
 protocol.hasUnifiedFOV = any(strcmp(lines,'Unified FOV Prescription:'));
 protocol.radialResolutionText = @() optionalValueAfter('Radial Acquisition Resolution(mm):');
+protocol.radialTransitionText = @() optionalValueAfter('DA-3DPR Transition Time(ms):');
 protocol.scannerProfile = @() readScannerProfile();
 protocol.txWeight = @readTxWeight;
 protocol.b1PlusFiles = @() filesBetween('B1p Filename:','E1p Filename:');

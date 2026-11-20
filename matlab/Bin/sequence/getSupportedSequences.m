@@ -6,6 +6,7 @@ function [sequenceNames, workflows] = getSupportedSequences()
         'SE',      'cartesian2D';
         'GRE_EPI', 'cartesian2D';
         'RAD_3D',  'radial3D';
+        'DA_3DPR', 'radial3D';
     };
     sequenceNames = sequences(:,1).';
     workflows = sequences(:,2).';

@@ -247,6 +247,38 @@ RF-spoiling model is added.
 Implementation: [SimulationRunner.cpp](../engine/signal/src/SimulationRunner.cpp)
 and [RAD_3D.m](../matlab/Sequences/RAD_3D.m).
 
+### Density-adapted radial readout
+
+DA-3DPR follows [Nagel et al. (2009), Fig. 1 and Eqs. 5–7](https://doi.org/10.1002/mrm.22157).
+ADC begins at the start of a linear ramp from zero to peak gradient
+`G0` over time `tr`. The gradient holds at `G0` up to `t0`. With time measured
+from ADC onset and `a = t0 - tr/2`, the transition radius is
+`k0 = gamma_Hz * G0 * a` in SI units. After the transition,
+
+```text
+k(t)^3 = k0^3 + 3 gamma_Hz G0 k0^2 (t - t0)
+G(t)   = G0 [1 + 3 (t - t0)/a]^(-2/3)
+```
+
+For each candidate ramp length in gradient raster ticks, solve for the
+peak needed to reach the nominal outer radius at the end of ADC. Test
+the per-axis peak and slew bounds using the largest absolute spoke
+direction component. The continuous slew is bounded on the rise by
+`G0/tr` and on the taper by its initial value `2 G0/a`. Also require
+`gamma_Hz G0 / BW <= 1/FOV` as a conservative radial spacing bound.
+Automatic timing takes the earliest feasible transition across the
+candidate ramps. A specified `t0` is used at its entered time if feasible.
+A smaller nonnegative value uses the same earliest feasible transition as
+automatic timing. Setup displays that value for an explicit request.
+
+Gradient raster intervals hold their mean amplitude, including a partial
+last interval when ADC ends between raster points. Original ADC midpoint
+timing is preserved. TE ends at ADC onset. A linear ramp down and a
+rewinder balance the gradient moment. Fibonacci spoke directions and
+the between-TR state evolution follow RAD_3D. The sequence uses the
+existing RF model. Reco derives DA-3DPR density weights from the exported
+sample positions and the protocol's nominal outer radius.
+
 ## EM inputs and CST reformatting
 
 **Used to place tissues and coil fields on one simulation grid.** The reformatter
@@ -366,13 +398,35 @@ gives smaller voxels at the same acquired bandwidth. For grid size `Ng=2N`:
 
 $$
 \mathbf q=\mathbf k F\frac{N_g}{N},\qquad
-\Delta x=F/N,\qquad
+\Delta x=F/N.
+$$
+
+For RAD_3D, the normalized density weights are
+
+$$
 w_s=\frac{\max(r_s,r_{\min}/2)^2}{\max_j\max(r_j,r_{\min}/2)^2}.
 $$
 
 Here `r_s = |k_s|/max|k|` and `r_min` is the smallest positive normalized radius.
 These radius-squared weights approximate 3D sampling density; they are not
 trajectory-optimized or exact finite-cell quadrature weights.
+
+DA-3DPR estimates a finite shell volume for each sample on a spoke. Let
+`v_j = |k_j|^3` in acquisition order. Place the internal cell boundaries
+halfway between adjacent `v_j`. The two exterior boundaries are zero and
+the cube of the nominal acquisition radius from the protocol. The weight
+before normalization is the upper boundary minus the lower boundary.
+Spoke solid angles are treated as equal and cancel in normalization.
+Compute the boundaries from the full acquired spoke, then retain samples
+within the spherical cutoff and clip their upper boundaries at the cutoff.
+When the cutoff falls inside a cell whose sample is outside the band,
+the part of that cell inside the band is omitted.
+
+Equal time steps give equal increments in `v` in the ideal taper, hence
+equal-volume interior cells there
+([Nagel et al., Eqs. 3–7](https://doi.org/10.1002/mrm.22157)). The boundaries
+estimate ADC-window moments from stored positions, including in the ramp,
+across the transition, and for rasterized or float32 trajectories.
 
 Samples are gridded separately per receiver with a separable Kaiser–Bessel kernel:
 

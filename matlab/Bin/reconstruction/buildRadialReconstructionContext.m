@@ -1,10 +1,14 @@
-function reconContext = buildRadialReconstructionContext(traj,reconSize,fovMeters,logFcn)
+function reconContext = buildRadialReconstructionContext(traj,reconSize,fovMeters,logFcn,densityAdaptedEdge)
 %BUILDRADIALRECONSTRUCTIONCONTEXT Prepare geometry and weights for radial gridding.
 %   traj is [samples per spoke, spokes, 3] in cycles/m, reconSize is the
 %   isotropic matrix size in voxels, and fovMeters is the three-axis FOV.
 %   An optional logFcn receives diagnostic format strings and arguments.
-    if nargin < 4
+%   For DA-3DPR, supply the nominal outer radius in cycles/m as densityAdaptedEdge.
+    if nargin < 4 || isempty(logFcn)
         logFcn = @(varargin) [];
+    end
+    if nargin < 5
+        densityAdaptedEdge = [];
     end
     validateattributes(reconSize,{'numeric'},{'scalar','real','finite','integer','positive'});
     oversampling = 2;
@@ -14,7 +18,7 @@ function reconContext = buildRadialReconstructionContext(traj,reconSize,fovMeter
     logFcn('Building reconstruction context traj=%s reconSize=%d gridSize=%d',...
         reconstructionSizeString(traj),reconSize,gridSize);
 
-    [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reconSize,fovMeters,logFcn);
+    [coords,dcf,info,retained] = prepareRadialTrajectory(traj,gridSize,reconSize,fovMeters,logFcn,densityAdaptedEdge);
     logFcn('Prepared coords=%s dcf=%s',reconstructionSizeString(coords),reconstructionSizeString(dcf));
     info.reconSize = reconSize;
     info.gridSize = gridSize;

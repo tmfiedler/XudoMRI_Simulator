@@ -344,9 +344,146 @@ for name = {'1H','23Na'}
         fprintf('PASS %-4s %-3s ramped RAD_3D k %.3g cycles/m (limit 0.0005)\n', ...
             nucleus,backends{b},kError);
     end
+    % Nagel Fig. 1 / Eq. 6, with an explicit 5 ms readout and a fully
+    % specified scanner profile. Dwell and gradient raster do not coincide.
+    daSamples = 384;
+    daT0 = .2;
+    duration = 5;
+    adc = struct('BW',daSamples/duration,'radialResolutionMm',4,'radialTransitionMs',daT0);
+    daLimits = [40 200 10];
+    daRF = struct('Shape',2,'Duration',tau,'Num',1,'FA',90);
+    da = DA_3DPR(tau/2,150,[daSamples 2],[200 200],daRF,adc,axesOn,0,[],nucleus,daLimits);
+    assert(da.Plot.transitionMs == daT0,'A feasible explicit t0 must be preserved.');
+    daSeq = combineSeqRect(da,1,{'P--A'},0,true);
+    acquired = daSeq.Main.ADC.value == 1;
+    midpoint = ((1:daSamples)-.5)*duration/daSamples;
+    assert(nnz(acquired)==2*daSamples && ...
+        max(abs(daSeq.Main.Dwell.value(acquired)-duration/daSamples))<1e-12, ...
+        'DA-3DPR must preserve original ADC windows.');
+    rows = find(daSeq.Main.ADC.value == -1);
+    time = daSeq.Main.Time.value;
+    starts = [0 cumsum(time(1:end-1))];
+    centers = starts(acquired)+daSeq.Main.SampleOffset.value(acquired);
+    assert(max(abs(centers-[.001+tau+midpoint,.001+tau+150+midpoint]))<1e-9, ...
+        'DA-3DPR original ADC midpoint timing changed.');
+    gradient = [daSeq.Main.Gx.value;daSeq.Main.Gy.value;daSeq.Main.Gz.value];
+    assert(max(abs(gradient),[],'all')<=daLimits(1)+1e-9);
+    for spoke = {rows(1):rows(2)-1,rows(2):numel(time)}
+        idx = spoke{1};
+        assert(max(abs(sum(gradient(:,idx).*time(idx),2)))<1e-7, ...
+            'DA-3DPR rewind left residual gradient area.');
+    end
+
+    % Known first feasible ramp on these two oblique spokes; reference
+    % moments are evaluated from the continuous waveform, independently.
+    rise = .02;
+    if sodium, rise = .07; end
+    transitionRadius = 125 / (1+3*(duration-daT0)/(daT0-rise/2))^(1/3);
+    velocity = transitionRadius/(daT0-rise/2);
+    radialReference = analyticDARadius(midpoint,rise,daT0,velocity,transitionRadius);
+    binTimes = (0:daSamples)*duration/daSamples;
+    binRadii = analyticDARadius(binTimes,rise,daT0,velocity,transitionRadius);
+    shellVolumes = repmat(diff(binRadii(:).^3),2,1);
+    expectedDA = [directions(1,:).'*radialReference,directions(2,:).'*radialReference];
+    % Linear interpolation of integrated k over a raster interval has error
+    % at most max(|k''|)*h^2/8. Assess native float32 export separately.
+    rasterBound = (gamma/1e6)*(daLimits(2)/(sqrt(3)/2))*(daLimits(3)/1000)^2/8;
+    assert(max(abs(da.Plot.kspacePreview.sampleRadii-radialReference))<=rasterBound+1e-9, ...
+        'DA-3DPR preview differs from the continuous radial reference.');
+    assert(max(diff(da.Plot.kspacePreview.sampleRadii))<=5, ...
+        'DA-3DPR violated radial sample spacing.');
+    adc.radialTransitionMs = [];
+    automatic = DA_3DPR(0,150,[daSamples 2],[200 200],daRF,adc,axesOn,1,[],nucleus,daLimits);
+    assert(automatic.Plot.transitionMs <= daT0 && automatic.Plot.transitionMs > 0);
+    minimum = automatic.Plot.transitionMs;
+    savedMinimum = str2double(sprintf('%.17g',minimum));
+    for value = [0 minimum/2 savedMinimum]
+        adc.radialTransitionMs = value;
+        [~,~,~,effectiveT0] = DA_3DPR(0,150,[daSamples 2],[200 200],daRF,adc,axesOn,1,[],nucleus,daLimits);
+        clamped = DA_3DPR(0,150,[daSamples 2],[200 200],daRF,adc,axesOn,1,[],nucleus,daLimits);
+        assert(effectiveT0 == minimum && isequal(clamped,automatic), ...
+            'An explicit minimum must match the automatic waveform and survive a text round trip.');
+    end
+    withDummy = combineSeqRect(automatic,1,{'P--A'},1,true);
+    assert(nnz(withDummy.Main.ADC.value==1)==2*daSamples && all(withDummy.Dummy.ADC.value<=0));
+
+    writeGenerated(fullfile(folder,'sequence.seqn'),daSeq);
+    writeFloats(fullfile(folder,'transmit.bfld'), ...
+        [count reshape([repmat(1/(4*gamma*tau*1e-3),1,count);zeros(1,count)],1,[])]);
+    t = tau/2+midpoint;
+    decay = exp(-t/100);
+    if sodium, decay = .6*exp(-t/3)+.4*exp(-t/20); end
+    expectedFirst = -1i*sum(amplitude(:).*exp(1i*2*pi*(x(:)*width)*expectedDA(1,1:daSamples)),1).*decay;
+    previewRadii = da.Plot.kspacePreview.sampleRadii;
+    expectedHeld = [directions(1,:).'*previewRadii,directions(2,:).'*previewRadii];
+    for b = 1:numel(backends)
+        [s,actualK] = simulate(repo,folder,backends{b},'DA_3DPR',nucleus);
+        assert(numel(s)==2*daSamples && all(isfinite(s)));
+        kError = max(abs(actualK-expectedDA),[],'all');
+        exportError = max(abs(actualK-expectedHeld),[],'all');
+        signalError = max(abs(s(1:daSamples).'-expectedFirst))/scale;
+        assert(kError<=rasterBound+5e-4 && exportError<5e-4 && signalError<=signalTolerance, ...
+            'DA-3DPR errors: analytic k %.6g, export k %.6g cycles/m, signal %.6g/S0.', ...
+            kError,exportError,signalError);
+        fprintf('PASS %-4s %-3s DA-3DPR analytic k %.4g, export k %.4g cycles/m, signal %.4g/S0\n', ...
+            nucleus,backends{b},kError,exportError,signalError);
+        checkDAReconstruction(actualK,s,daSamples,shellVolumes,nucleus,backends{b});
+    end
 end
 checkRadialReconstruction();
+checkDAShellWeights();
 fprintf('PASS: requested backends and both nuclei. GUI and noise coverage is separate.\n');
+end
+
+function radius = analyticDARadius(time,rise,transition,velocity,transitionRadius)
+radius = velocity*(time-rise/2);
+onRamp = time<rise;
+radius(onRamp) = velocity*time(onRamp).^2/(2*rise);
+onTaper = time>=transition;
+radius(onTaper) = transitionRadius*(1+3*velocity/transitionRadius*(time(onTaper)-transition)).^(1/3);
+end
+
+function checkDAReconstruction(k,signal,samplesPerSpoke,shellVolumes,nucleus,backend)
+% Use the measured sample positions but independently integrate each
+% continuous ADC window to get the reference shell volume.
+matrixSize = 50;
+fov = .2;
+trajectory = reshape(k.',samplesPerSpoke,[],3);
+context = buildRadialReconstructionContext(trajectory,matrixSize,[fov fov fov],[],125);
+recon = reconstructRadialDataset(reshape(signal,samplesPerSpoke,[]),context);
+assert(all(context.retained),'The prescribed matrix must retain the acquired radial band.');
+offsets = [-25 -12 0 12 24];
+[x,y,z] = ndgrid(offsets);
+positions = [x(:),y(:),z(:)]*(fov/matrixSize);
+weighted = signal(:).*shellVolumes;
+direct = exp(-2i*pi*(positions*k)) * weighted / sum(shellVolumes);
+index = floor(matrixSize/2)+1+offsets;
+values = recon.volumeComplex(index,index,index);
+scale = sum(abs(weighted))/sum(shellVolumes);
+err = max(abs(double(values(:))-direct))/scale;
+assert(err<=.005,'DA-3DPR gridding error %.6g exceeds 0.005.',err);
+fprintf('PASS %-4s %-3s DA-3DPR reconstruction vs analytic shell-weighted Fourier sum %.4g (limit 0.005)\n', ...
+    nucleus,backend,err);
+end
+
+function checkDAShellWeights()
+% First spoke has equal-volume cells. The second exercises unequal inner
+% cells. The 16^3 cutoff (q=4.096) clips a retained cell on the second
+% spoke and falls in an excluded cell on the first.
+cube = [1 .125;3 1;5 4;7 7];
+k = (100/2)*cube.^(1/3) .* reshape([1 0 0;0 1 0],1,2,3);
+full = buildRadialReconstructionContext(k,20,[.1 .1 .1],[],100);
+weights = [2;2;2;2;.5625;1.9375;3;2.5]/3;
+assert(max(abs(full.dcf-weights))<1e-12);
+clipped = buildRadialReconstructionContext(k,16,[.1 .1 .1],[],100);
+assert(isequal(find(clipped.retained),[1;2;5;6;7]));
+weights = [2;2;.5625;1.9375;1.596]/2;
+assert(max(abs(clipped.dcf-weights))<1e-12);
+
+singleSample = reshape([40 0 0;0 60 0],1,2,3);
+singleContext = buildRadialReconstructionContext(singleSample,20,[.1 .1 .1],[],100);
+assert(isequal(singleContext.dcf,[1;1]),'Single-sample spokes need one weight each.');
+fprintf('PASS DA-3DPR shell weights, cutoff clipping and single-sample spokes\n');
 end
 
 function checkRadialReconstruction()

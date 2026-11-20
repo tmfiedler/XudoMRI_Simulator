@@ -22,6 +22,13 @@ when their stored contract changes.
 
 ### Features
 
+- Add the Nagel DA-3DPR readout with ramp sampling, scanner-limited transition
+  timing, an optional saved t0, and a nonuniform k-space preview in Setup.
+  Explicit transition times below the feasible minimum snap to that minimum.
+  The t0 tooltip shows the minimum for the current settings.
+- Reconstruct DA-3DPR in Reco using per-spoke shell-volume density
+  compensation and the existing 3D radial gridding pipeline.
+
 - Add a Signal + Noise mode that queues two jobs in one run folder.
 
 - Support gzip-compressed geometry and coil maps in Setup, the field viewer,
